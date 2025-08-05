@@ -715,14 +715,21 @@
                 artworkPlaceholder.style.display = 'none';
             }
             
-            // Enable play button if preview is available
+            // Debug: Log preview URL availability
+            console.log('Selected song preview URL:', track.preview_url);
+            
+            // Enable/disable play button based on preview availability
             const playBtn = document.getElementById('playBtn');
             if (track.preview_url) {
                 playBtn.disabled = false;
+                playBtn.style.opacity = '1';
                 playBtn.title = 'Play 30-second preview';
+                console.log('Play button enabled - preview available');
             } else {
                 playBtn.disabled = true;
-                playBtn.title = 'No preview available';
+                playBtn.style.opacity = '0.5';
+                playBtn.title = 'No preview available for this song';
+                console.log('Play button disabled - no preview available');
             }
             
             document.getElementById('selectedSong').classList.add('show');
