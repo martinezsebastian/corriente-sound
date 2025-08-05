@@ -274,7 +274,9 @@
                 <li>Go to <a href="https://developer.spotify.com/dashboard" target="_blank" style="color: #a855f7;">developer.spotify.com/dashboard</a></li>
                 <li>Create a new app</li>
                 <li>Copy your Client ID and Client Secret</li>
-                <li>Add your current URL to Redirect URIs</li>
+                <li><strong>Important:</strong> In your Spotify app settings, add this exact URL to Redirect URIs: <br>
+                    <code style="background: #1f2937; padding: 4px 8px; border-radius: 4px; color: #a855f7;" id="currentUrl">Loading current URL...</code>
+                </li>
             </ol>
             
             <div class="credentials-form">
@@ -461,8 +463,11 @@
             }
         }
 
-        // Search input handler
+        // Display current URL for easy copying
         document.addEventListener('DOMContentLoaded', function() {
+            // Show the exact URL that needs to be added to Spotify
+            document.getElementById('currentUrl').textContent = window.location.origin;
+            
             const searchInput = document.getElementById('songSearch');
             
             searchInput.addEventListener('input', function(e) {
