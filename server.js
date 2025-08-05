@@ -172,7 +172,26 @@ app.get('/api/recommendations', async (req, res) => {
 
 // Serve the main HTML file
 app.get('/', (req, res) => {
-    res.sendFile(path.join(__dirname, 'public', 'index.html'));
+    const htmlPath = path.join(__dirname, 'public', 'index.html');
+    console.log('Serving HTML from:', htmlPath);
+    
+    // Check if file exists, if not serve a simple response
+    const fs = require('fs');
+    if (fs.existsSync(htmlPath)) {
+        res.sendFile(htmlPath);
+    } else {
+        res.send(`
+            <h1>Corriente Sound Backend is Running!</h1>
+            <p>Backend API is working, but index.html not found.</p>
+            <p>Make sure index.html is in the public/ folder.</p>
+            <p>API endpoints:</p>
+            <ul>
+                <li><a href="/api/health">/api/health</a></li>
+                <li>POST /api/auth</li>
+                <li>GET /api/search?q=query</li>
+            </ul>
+        `);
+    }
 });
 
 // Error handling middleware
