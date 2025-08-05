@@ -413,24 +413,21 @@
 
         <!-- Setup Instructions -->
         <div class="setup-info" id="setupInfo">
-            <h3 style="margin-bottom: 15px;">🔧 Spotify API Setup</h3>
-            <p style="margin-bottom: 15px;">To test with real Spotify data, enter your Spotify app credentials below:</p>
+            <h3 style="margin-bottom: 15px;">🔧 Quick Setup</h3>
+            <p style="margin-bottom: 15px;">To create actual Spotify playlists, we need a user token:</p>
             <ol style="margin-bottom: 20px; color: #d1d5db; line-height: 1.6;">
-                <li>Go to <a href="https://developer.spotify.com/dashboard" target="_blank" style="color: #03fca5;">developer.spotify.com/dashboard</a></li>
-                <li>Create a new app or use existing one</li>
-                <li>Copy your Client ID and Client Secret</li>
-                <li>Add <code>http://127.0.0.1:8000</code> to Redirect URIs</li>
-                <li>Paste credentials below to test</li>
+                <li>Go to <a href="https://developer.spotify.com/console/post-playlists/" target="_blank" style="color: #03fca5;">Spotify Web API Console</a></li>
+                <li>Click "Get Token" and select all playlist scopes</li>
+                <li>Copy the OAuth Token and paste it below</li>
             </ol>
             
             <div class="credentials-form">
-                <input type="text" id="clientId" placeholder="Spotify Client ID" />
-                <input type="password" id="clientSecret" placeholder="Spotify Client Secret" />
-                <button onclick="setupSpotifyAuth()">Connect to Spotify</button>
+                <input type="text" id="userToken" placeholder="Paste your OAuth Token here" style="margin-bottom: 15px;" />
+                <button onclick="setupWithToken()">Start App</button>
             </div>
             
             <p style="margin-top: 15px; font-size: 0.9rem; color: #9ca3af;">
-                <strong>Note:</strong> For production, never expose client secret in frontend. This is just for testing.
+                <strong>Note:</strong> This token will work for 1 hour and allows playlist creation.
             </p>
         </div>
 
@@ -539,22 +536,32 @@
         let currentSong = null;
         let searchTimeout = null;
 
-        // Setup Spotify credentials
-        function setupSpotifyAuth() {
-            const clientId = document.getElementById('clientId').value.trim();
-            const clientSecret = document.getElementById('clientSecret').value.trim();
+        // Setup with user token (simpler approach)
+        async function setupWithToken() {
+            const userToken = document.getElementById('userToken').value.trim();
             
-            if (!clientId || !clientSecret) {
-                showError('Please enter both Client ID and Client Secret');
+            if (!userToken) {
+                showError('Please enter your OAuth token');
                 return;
             }
 
-            spotifyConfig.clientId = clientId;
-            spotifyConfig.clientSecret = clientSecret;
+            spotifyConfig.userToken = userToken;
+            spotifyConfig.accessToken = userToken;
+            spotifyConfig.isAuthenticated = true;
             
-            // Hide setup, show auth
-            document.getElementById('setupInfo').style.display = 'none';
-            document.getElementById('authSection').classList.remove('hidden');
+            try {
+                // Get user profile to verify token
+                await getUserProfile();
+                
+                // Hide setup, show search
+                document.getElementById('setupInfo').style.display = 'none';
+                document.getElementById('searchSection').classList.remove('hidden');
+                
+                console.log('Setup complete with user token!');
+                
+            } catch (error) {
+                showError('Invalid token or authentication failed');
+            }
         }
 
         // Get Spotify access token (Client Credentials Flow)
