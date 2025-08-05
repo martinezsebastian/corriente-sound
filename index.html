@@ -67,6 +67,8 @@
             border-radius: 12px;
             font-weight: 600;
             transition: background-color 0.3s;
+            border: none;
+            cursor: pointer;
         }
 
         .spotify-btn:hover {
@@ -161,6 +163,27 @@
         .song-details p {
             color: #d1d5db;
             font-size: 0.9rem;
+        }
+
+        .play-btn {
+            padding: 10px 15px;
+            background: linear-gradient(45deg, #03fca5, #ec4899);
+            border: none;
+            border-radius: 8px;
+            color: white;
+            font-size: 1rem;
+            cursor: pointer;
+            transition: transform 0.3s;
+            min-width: 50px;
+        }
+
+        .play-btn:hover {
+            transform: scale(1.05);
+        }
+
+        .play-btn:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
         }
 
         .mood-section {
@@ -369,69 +392,13 @@
         .error.show {
             display: block;
         }
-
-        .setup-info {
-            background: rgba(59, 130, 246, 0.1);
-            border: 1px solid rgba(59, 130, 246, 0.3);
-            padding: 20px;
-            border-radius: 12px;
-            margin-bottom: 30px;
-        }
-
-        .credentials-form {
-            margin-top: 20px;
-        }
-
-        .credentials-form input {
-            width: 100%;
-            padding: 10px;
-            margin-bottom: 10px;
-            border: 1px solid #374151;
-            border-radius: 6px;
-            background: #1f2937;
-            color: white;
-        }
-
-        .credentials-form button {
-            width: 100%;
-            padding: 12px;
-            background: #03fca5;
-            border: none;
-            border-radius: 6px;
-            color: white;
-            font-weight: 600;
-            cursor: pointer;
-        }
     </style>
 </head>
 <body>
     <div class="container">
         <div class="header">
             <h1 class="logo">Corriente Sound</h1>
-            <p class="subtitle">Start with a song, steer the current</p>
-        </div>
-
-        <!-- Setup Instructions -->
-        <div class="setup-info" id="setupInfo">
-            <h3 style="margin-bottom: 15px;">🔧 Spotify API Setup</h3>
-            <p style="margin-bottom: 15px;">To test with real Spotify data, enter your Spotify app credentials below:</p>
-            <ol style="margin-bottom: 20px; color: #d1d5db; line-height: 1.6;">
-                <li>Go to <a href="https://developer.spotify.com/dashboard" target="_blank" style="color: #03fca5;">developer.spotify.com/dashboard</a></li>
-                <li>Create a new app or use existing one</li>
-                <li>Copy your Client ID and Client Secret</li>
-                <li>Add <code>http://127.0.0.1:8000</code> to Redirect URIs</li>
-                <li>Paste credentials below to test</li>
-            </ol>
-            
-            <div class="credentials-form">
-                <input type="text" id="clientId" placeholder="Spotify Client ID" />
-                <input type="password" id="clientSecret" placeholder="Spotify Client Secret" />
-                <button onclick="setupSpotifyAuth()">Connect to Spotify</button>
-            </div>
-            
-            <p style="margin-top: 15px; font-size: 0.9rem; color: #9ca3af;">
-                <strong>Note:</strong> For production, never expose client secret in frontend. This is just for testing.
-            </p>
+            <p class="subtitle">Play your current</p>
         </div>
 
         <!-- Authentication Section -->
@@ -477,6 +444,9 @@
                         <p id="selectedArtist">Artist Name</p>
                         <p id="selectedAlbum" style="font-size: 0.8rem; color: #9ca3af;"></p>
                     </div>
+                    <button class="play-btn" id="playBtn" onclick="togglePlay()">
+                        <span id="playIcon">▶️</span>
+                    </button>
                 </div>
             </div>
         </div>
@@ -524,7 +494,7 @@
     </div>
 
     <script>
-        // Spotify API Configuration - Add your credentials here
+        // Spotify API Configuration - Using existing credentials
         let spotifyConfig = {
             clientId: 'b69fa23fedcb4de5b392e70fda1b1848',
             clientSecret: 'a6639d1a28914578804447d13cec07b4',
@@ -535,24 +505,7 @@
         let selectedMoods = [];
         let currentSong = null;
         let searchTimeout = null;
-
-        // Setup Spotify credentials
-        function setupSpotifyAuth() {
-            const clientId = document.getElementById('clientId').value.trim();
-            const clientSecret = document.getElementById('clientSecret').value.trim();
-            
-            if (!clientId || !clientSecret) {
-                showError('Please enter both Client ID and Client Secret');
-                return;
-            }
-
-            spotifyConfig.clientId = clientId;
-            spotifyConfig.clientSecret = clientSecret;
-            
-            // Hide setup, show auth
-            document.getElementById('setupInfo').style.display = 'none';
-            document.getElementById('authSection').classList.remove('hidden');
-        }
+        let currentAudio = null;
 
         // Get Spotify access token (Client Credentials Flow)
         async function getSpotifyToken() {
@@ -704,13 +657,6 @@
 
         // Auto-start if credentials are provided
         document.addEventListener('DOMContentLoaded', function() {
-            // Check if credentials are already set
-            if (spotifyConfig.clientId && spotifyConfig.clientId !== 'YOUR_CLIENT_ID_HERE') {
-                // Skip setup, go straight to auth
-                document.getElementById('setupInfo').style.display = 'none';
-                document.getElementById('authSection').classList.remove('hidden');
-            }
-
             const searchInput = document.getElementById('songSearch');
             
             searchInput.addEventListener('input', function(e) {
@@ -771,6 +717,13 @@
         function selectSong(track) {
             currentSong = track;
             
+            // Stop any currently playing audio
+            if (currentAudio) {
+                currentAudio.pause();
+                currentAudio = null;
+                updatePlayButton(false);
+            }
+            
             // Update selected song display
             document.getElementById('selectedTitle').textContent = track.name;
             document.getElementById('selectedArtist').textContent = track.artists[0].name;
@@ -784,6 +737,16 @@
                 artworkImg.src = track.album.images[1]?.url || track.album.images[0]?.url;
                 artworkImg.style.display = 'block';
                 artworkPlaceholder.style.display = 'none';
+            }
+            
+            // Enable play button if preview is available
+            const playBtn = document.getElementById('playBtn');
+            if (track.preview_url) {
+                playBtn.disabled = false;
+                playBtn.title = 'Play 30-second preview';
+            } else {
+                playBtn.disabled = true;
+                playBtn.title = 'No preview available';
             }
             
             document.getElementById('selectedSong').classList.add('show');
@@ -876,6 +839,43 @@
 
         function openInSpotify(url) {
             window.open(url, '_blank');
+        }
+
+        // Play/pause functionality
+        function togglePlay() {
+            if (!currentSong || !currentSong.preview_url) {
+                showError('No preview available for this song');
+                return;
+            }
+
+            if (currentAudio && !currentAudio.paused) {
+                // Pause current audio
+                currentAudio.pause();
+                updatePlayButton(false);
+            } else {
+                // Stop any previous audio
+                if (currentAudio) {
+                    currentAudio.pause();
+                }
+
+                // Play new audio
+                currentAudio = new Audio(currentSong.preview_url);
+                currentAudio.play().then(() => {
+                    updatePlayButton(true);
+                }).catch(error => {
+                    showError('Failed to play audio: ' + error.message);
+                });
+
+                // Handle audio end
+                currentAudio.addEventListener('ended', () => {
+                    updatePlayButton(false);
+                });
+            }
+        }
+
+        function updatePlayButton(isPlaying) {
+            const playIcon = document.getElementById('playIcon');
+            playIcon.textContent = isPlaying ? '⏸️' : '▶️';
         }
 
         // Utility functions
