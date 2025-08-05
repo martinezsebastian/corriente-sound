@@ -524,10 +524,10 @@
     </div>
 
     <script>
-        // Spotify API Configuration
+        // Spotify API Configuration - Add your credentials here
         let spotifyConfig = {
-            clientId: '',
-            clientSecret: '',
+            clientId: 'b69fa23fedcb4de5b392e70fda1b1848',
+            clientSecret: 'a6639d1a28914578804447d13cec07b4',
             accessToken: '',
             isAuthenticated: false
         };
@@ -702,8 +702,15 @@
             }
         }
 
-        // Search input handler
+        // Auto-start if credentials are provided
         document.addEventListener('DOMContentLoaded', function() {
+            // Check if credentials are already set
+            if (spotifyConfig.clientId && spotifyConfig.clientId !== 'YOUR_CLIENT_ID_HERE') {
+                // Skip setup, go straight to auth
+                document.getElementById('setupInfo').style.display = 'none';
+                document.getElementById('authSection').classList.remove('hidden');
+            }
+
             const searchInput = document.getElementById('songSearch');
             
             searchInput.addEventListener('input', function(e) {
