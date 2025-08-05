@@ -663,7 +663,16 @@
             if (tracks && tracks.length > 0) {
                 resultsDiv.innerHTML = '';
                 
-                tracks.forEach(track => {
+                console.log('Full search results:', tracks);
+                
+                tracks.forEach((track, index) => {
+                    console.log(`Track ${index + 1}:`, {
+                        name: track.name,
+                        artist: track.artists[0].name,
+                        preview_url: track.preview_url,
+                        external_urls: track.external_urls
+                    });
+                    
                     const trackDiv = document.createElement('div');
                     trackDiv.className = 'track-item';
                     trackDiv.onclick = () => selectSong(track);
@@ -672,12 +681,18 @@
                         `<img src="${track.album.images[2]?.url || track.album.images[0]?.url}" class="track-artwork" />` :
                         `<div class="track-artwork-placeholder">🎵</div>`;
                     
+                    // Add preview indicator
+                    const previewIndicator = track.preview_url ? 
+                        '<span style="color: #03fca5; font-size: 0.8rem;">▶️ Preview</span>' : 
+                        '<span style="color: #9ca3af; font-size: 0.8rem;">❌ No preview</span>';
+                    
                     trackDiv.innerHTML = `
                         <span class="track-number">🎵</span>
                         ${artwork}
                         <div class="track-info">
                             <div class="track-title">${track.name}</div>
                             <div class="track-artist">${track.artists[0].name}</div>
+                            <div>${previewIndicator}</div>
                         </div>
                     `;
                     
@@ -826,13 +841,23 @@
 
         // Play/pause functionality
         function togglePlay() {
-            if (!currentSong || !currentSong.preview_url) {
+            console.log('Play button clicked');
+            console.log('Current song:', currentSong);
+            console.log('Preview URL:', currentSong?.preview_url);
+            
+            if (!currentSong) {
+                showError('No song selected');
+                return;
+            }
+            
+            if (!currentSong.preview_url) {
                 showError('No preview available for this song');
                 return;
             }
 
             if (currentAudio && !currentAudio.paused) {
                 // Pause current audio
+                console.log('Pausing audio');
                 currentAudio.pause();
                 updatePlayButton(false);
             } else {
@@ -841,16 +866,29 @@
                     currentAudio.pause();
                 }
 
+                console.log('Starting audio playback:', currentSong.preview_url);
+                
                 // Play new audio
                 currentAudio = new Audio(currentSong.preview_url);
+                
                 currentAudio.play().then(() => {
+                    console.log('Audio playing successfully');
                     updatePlayButton(true);
                 }).catch(error => {
+                    console.error('Audio play error:', error);
                     showError('Failed to play audio: ' + error.message);
                 });
 
                 // Handle audio end
                 currentAudio.addEventListener('ended', () => {
+                    console.log('Audio ended');
+                    updatePlayButton(false);
+                });
+                
+                // Handle audio errors
+                currentAudio.addEventListener('error', (e) => {
+                    console.error('Audio error:', e);
+                    showError('Audio playback failed');
                     updatePlayButton(false);
                 });
             }
@@ -859,6 +897,7 @@
         function updatePlayButton(isPlaying) {
             const playIcon = document.getElementById('playIcon');
             playIcon.textContent = isPlaying ? '⏸️' : '▶️';
+            console.log('Play button updated:', isPlaying ? 'playing' : 'paused');
         }
 
         // Utility functions
