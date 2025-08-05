@@ -820,6 +820,9 @@
         // Create actual Spotify playlist
         async function createSpotifyPlaylist(selectedSong) {
             try {
+                console.log('Creating playlist for user:', spotifyConfig.userId);
+                console.log('Selected song:', selectedSong.name);
+                
                 // Create playlist
                 const playlistResponse = await fetch(`https://api.spotify.com/v1/users/${spotifyConfig.userId}/playlists`, {
                     method: 'POST',
@@ -834,11 +837,16 @@
                     })
                 });
 
+                console.log('Playlist creation response status:', playlistResponse.status);
+                
                 if (!playlistResponse.ok) {
-                    throw new Error('Failed to create playlist');
+                    const errorData = await playlistResponse.text();
+                    console.error('Playlist creation error:', errorData);
+                    throw new Error(`Failed to create playlist (${playlistResponse.status}): ${errorData}`);
                 }
 
                 const playlist = await playlistResponse.json();
+                console.log('Created playlist:', playlist.name, playlist.id);
                 
                 // Add the selected song to the playlist
                 const addTracksResponse = await fetch(`https://api.spotify.com/v1/playlists/${playlist.id}/tracks`, {
@@ -852,10 +860,15 @@
                     })
                 });
 
+                console.log('Add tracks response status:', addTracksResponse.status);
+
                 if (!addTracksResponse.ok) {
-                    throw new Error('Failed to add track to playlist');
+                    const errorData = await addTracksResponse.text();
+                    console.error('Add tracks error:', errorData);
+                    throw new Error(`Failed to add track to playlist (${addTracksResponse.status}): ${errorData}`);
                 }
 
+                console.log('Successfully added track to playlist');
                 return playlist;
                 
             } catch (error) {
