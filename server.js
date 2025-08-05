@@ -1,7 +1,6 @@
 const express = require('express');
 const cors = require('cors');
 const path = require('path');
-require('dotenv').config();
 
 const app = express();
 const PORT = process.env.PORT || 3001;
@@ -11,9 +10,17 @@ app.use(cors());
 app.use(express.json());
 app.use(express.static('public')); // Serve static files
 
-// Spotify API Configuration
-const SPOTIFY_CLIENT_ID = process.env.SPOTIFY_CLIENT_ID || 'b69fa23fedcb4de5b392e70fda1b1848';
-const SPOTIFY_CLIENT_SECRET = process.env.SPOTIFY_CLIENT_SECRET || 'a6639d1a28914578804447d13cec07b4';
+// Spotify API Configuration - Using environment variables from Vercel
+const SPOTIFY_CLIENT_ID = process.env.SPOTIFY_CLIENT_ID;
+const SPOTIFY_CLIENT_SECRET = process.env.SPOTIFY_CLIENT_SECRET;
+
+// Check if credentials are available
+if (!SPOTIFY_CLIENT_ID || !SPOTIFY_CLIENT_SECRET) {
+    console.error('❌ Missing Spotify credentials. Please set SPOTIFY_CLIENT_ID and SPOTIFY_CLIENT_SECRET environment variables.');
+    console.log('ℹ️  For local development, you can set them in your shell:');
+    console.log('   export SPOTIFY_CLIENT_ID=your_client_id');
+    console.log('   export SPOTIFY_CLIENT_SECRET=your_client_secret');
+}
 
 let spotifyAccessToken = '';
 let tokenExpiryTime = 0;
