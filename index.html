@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Corriente Sound - Simple Playback Demo</title>
+    <title>Corriente Sound</title>
     <style>
         * {
             margin: 0;
@@ -17,7 +17,6 @@
             min-height: 100vh;
             color: white;
             padding: 20px;
-            padding-bottom: 120px;
         }
 
         .container {
@@ -31,7 +30,7 @@
         }
 
         .logo {
-            font-size: 2.5rem;
+            font-size: 3rem;
             font-weight: bold;
             background: linear-gradient(45deg, #a855f7, #ec4899);
             -webkit-background-clip: text;
@@ -39,18 +38,45 @@
             margin-bottom: 10px;
         }
 
-        .subtitle {
+        .slogan {
             color: #d1d5db;
-            font-size: 1.1rem;
+            font-size: 1.2rem;
+            font-style: italic;
         }
 
-        .demo-notice {
-            background: rgba(59, 130, 246, 0.1);
-            border: 1px solid rgba(59, 130, 246, 0.3);
-            padding: 20px;
-            border-radius: 12px;
+        .auth-section {
+            background: rgba(31, 41, 55, 0.8);
+            padding: 40px;
+            border-radius: 20px;
             margin-bottom: 30px;
+            border: 1px solid rgba(139, 92, 246, 0.3);
             text-align: center;
+        }
+
+        .auth-section.hidden {
+            display: none;
+        }
+
+        .spotify-btn {
+            display: inline-flex;
+            align-items: center;
+            gap: 12px;
+            padding: 18px 36px;
+            background: #1db954;
+            color: white;
+            text-decoration: none;
+            border-radius: 50px;
+            font-weight: 600;
+            font-size: 1.1rem;
+            transition: all 0.3s;
+            border: none;
+            cursor: pointer;
+        }
+
+        .spotify-btn:hover {
+            background: #1aa34a;
+            transform: translateY(-2px);
+            box-shadow: 0 10px 25px rgba(29, 185, 84, 0.3);
         }
 
         .search-section {
@@ -61,12 +87,16 @@
             border: 1px solid rgba(139, 92, 246, 0.3);
         }
 
+        .search-section.hidden {
+            display: none;
+        }
+
         .search-input {
             width: 100%;
-            padding: 15px 20px;
+            padding: 18px 24px;
             font-size: 1.1rem;
             border: 2px solid #374151;
-            border-radius: 12px;
+            border-radius: 15px;
             background: #1f2937;
             color: white;
             margin-bottom: 20px;
@@ -76,6 +106,7 @@
         .search-input:focus {
             outline: none;
             border-color: #a855f7;
+            box-shadow: 0 0 0 3px rgba(168, 85, 247, 0.1);
         }
 
         .search-input::placeholder {
@@ -84,7 +115,7 @@
 
         .search-results {
             display: none;
-            max-height: 300px;
+            max-height: 400px;
             overflow-y: auto;
         }
 
@@ -92,214 +123,42 @@
             display: block;
         }
 
-        .selected-song {
-            display: none;
-            background: #374151;
-            padding: 20px;
-            border-radius: 12px;
-            margin-bottom: 20px;
-            border: 2px solid #a855f7;
-        }
-
-        .selected-song.show {
-            display: block;
-        }
-
-        .song-info {
-            display: flex;
-            align-items: center;
-            gap: 15px;
-        }
-
-        .song-artwork {
-            width: 60px;
-            height: 60px;
-            border-radius: 8px;
-            object-fit: cover;
-        }
-
-        .song-artwork-placeholder {
-            width: 60px;
-            height: 60px;
-            background: linear-gradient(45deg, #a855f7, #ec4899);
-            border-radius: 8px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            font-size: 1.5rem;
-        }
-
-        .song-details h3 {
-            font-size: 1.2rem;
-            margin-bottom: 5px;
-        }
-
-        .song-details p {
-            color: #d1d5db;
-            font-size: 0.9rem;
-        }
-
-        .mood-section {
-            display: none;
-            background: rgba(31, 41, 55, 0.8);
-            padding: 30px;
-            border-radius: 20px;
-            margin-bottom: 30px;
-            border: 1px solid rgba(139, 92, 246, 0.3);
-        }
-
-        .mood-section.show {
-            display: block;
-        }
-
-        .mood-title {
-            font-size: 1.3rem;
-            margin-bottom: 10px;
-            text-align: center;
-        }
-
-        .mood-subtitle {
-            color: #d1d5db;
-            text-align: center;
-            margin-bottom: 25px;
-        }
-
-        .mood-buttons {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
-            gap: 15px;
-            margin-bottom: 25px;
-        }
-
-        .mood-btn {
-            padding: 20px;
-            border: 2px solid #374151;
-            border-radius: 12px;
-            background: #1f2937;
-            color: white;
-            cursor: pointer;
-            transition: all 0.3s;
-            text-align: center;
-            font-size: 1rem;
-            font-weight: 500;
-        }
-
-        .mood-btn:hover {
-            border-color: #a855f7;
-            transform: translateY(-2px);
-        }
-
-        .mood-btn.selected {
-            background: #a855f7;
-            border-color: #a855f7;
-            box-shadow: 0 10px 20px rgba(168, 85, 247, 0.3);
-        }
-
-        .mood-icon {
-            font-size: 2rem;
-            margin-bottom: 8px;
-            display: block;
-        }
-
-        .generate-btn {
-            display: none;
-            width: 100%;
-            padding: 15px;
-            background: linear-gradient(45deg, #a855f7, #ec4899);
-            border: none;
-            border-radius: 12px;
-            color: white;
-            font-size: 1.1rem;
-            font-weight: 600;
-            cursor: pointer;
-            transition: transform 0.3s;
-        }
-
-        .generate-btn.show {
-            display: block;
-        }
-
-        .generate-btn:hover {
-            transform: translateY(-2px);
-        }
-
-        .playlist-section {
-            display: none;
-            background: rgba(31, 41, 55, 0.8);
-            padding: 30px;
-            border-radius: 20px;
-            border: 1px solid rgba(139, 92, 246, 0.3);
-        }
-
-        .playlist-section.show {
-            display: block;
-        }
-
-        .playlist-header {
-            text-align: center;
-            margin-bottom: 25px;
-        }
-
-        .playlist-title {
-            font-size: 1.3rem;
-            margin-bottom: 10px;
-        }
-
-        .playlist-meta {
-            color: #d1d5db;
-            font-size: 0.9rem;
-        }
-
-        .playlist-tracks {
-            space-y: 10px;
-        }
-
         .track-item {
             display: flex;
             align-items: center;
-            padding: 15px;
+            padding: 16px;
             background: #374151;
-            border-radius: 10px;
-            margin-bottom: 10px;
+            border-radius: 12px;
+            margin-bottom: 12px;
             transition: all 0.3s;
             cursor: pointer;
-            position: relative;
+            border: 2px solid transparent;
         }
 
         .track-item:hover {
             background: #4b5563;
-        }
-
-        .track-item.playing {
-            background: rgba(168, 85, 247, 0.2);
-            border: 1px solid #a855f7;
-            transform: scale(1.02);
-        }
-
-        .track-number {
-            width: 30px;
-            color: #9ca3af;
-            font-size: 0.9rem;
+            border-color: #a855f7;
+            transform: translateY(-1px);
         }
 
         .track-artwork {
-            width: 40px;
-            height: 40px;
-            border-radius: 6px;
-            margin-right: 15px;
+            width: 50px;
+            height: 50px;
+            border-radius: 8px;
+            margin-right: 16px;
             object-fit: cover;
         }
 
         .track-artwork-placeholder {
-            width: 40px;
-            height: 40px;
-            background: #6b7280;
-            border-radius: 6px;
-            margin-right: 15px;
+            width: 50px;
+            height: 50px;
+            background: linear-gradient(45deg, #a855f7, #ec4899);
+            border-radius: 8px;
+            margin-right: 16px;
             display: flex;
             align-items: center;
             justify-content: center;
-            font-size: 0.8rem;
+            font-size: 1.2rem;
         }
 
         .track-info {
@@ -307,8 +166,9 @@
         }
 
         .track-title {
-            font-weight: 500;
-            margin-bottom: 3px;
+            font-weight: 600;
+            margin-bottom: 4px;
+            font-size: 1rem;
         }
 
         .track-artist {
@@ -316,25 +176,9 @@
             font-size: 0.9rem;
         }
 
-        .mood-tag {
-            padding: 4px 8px;
-            border-radius: 12px;
-            font-size: 0.7rem;
-            font-weight: 500;
-            margin-left: 10px;
-        }
-
-        .mood-upbeat { background: rgba(249, 115, 22, 0.3); color: #fb923c; }
-        .mood-chill { background: rgba(34, 197, 94, 0.3); color: #4ade80; }
-        .mood-groovy { background: rgba(168, 85, 247, 0.3); color: #a855f7; }
-        .mood-romantic { background: rgba(236, 72, 153, 0.3); color: #ec4899; }
-        .mood-original { background: rgba(59, 130, 246, 0.3); color: #60a5fa; }
-
         .play-btn {
-            position: absolute;
-            right: 15px;
-            width: 35px;
-            height: 35px;
+            width: 45px;
+            height: 45px;
             border-radius: 50%;
             background: #1db954;
             border: none;
@@ -343,7 +187,7 @@
             display: flex;
             align-items: center;
             justify-content: center;
-            font-size: 0.9rem;
+            font-size: 1.1rem;
             transition: all 0.3s;
         }
 
@@ -352,122 +196,10 @@
             transform: scale(1.1);
         }
 
-        .play-btn.playing {
-            background: #a855f7;
-        }
-
-        .player-section {
-            position: fixed;
-            bottom: 0;
-            left: 0;
-            right: 0;
-            background: rgba(17, 24, 39, 0.95);
-            backdrop-filter: blur(10px);
-            border-top: 1px solid rgba(139, 92, 246, 0.3);
-            padding: 20px;
-            transform: translateY(100%);
-            transition: transform 0.3s ease;
-            z-index: 1000;
-        }
-
-        .player-section.show {
-            transform: translateY(0);
-        }
-
-        .player-content {
-            max-width: 800px;
-            margin: 0 auto;
-            display: flex;
-            align-items: center;
-            gap: 20px;
-        }
-
-        .now-playing {
-            display: flex;
-            align-items: center;
-            gap: 15px;
-            flex: 1;
-        }
-
-        .now-playing-artwork {
-            width: 50px;
-            height: 50px;
-            border-radius: 8px;
-            object-fit: cover;
-        }
-
-        .now-playing-info h4 {
-            font-size: 1rem;
-            margin-bottom: 3px;
-        }
-
-        .now-playing-info p {
-            color: #d1d5db;
-            font-size: 0.9rem;
-        }
-
-        .player-controls {
-            display: flex;
-            align-items: center;
-            gap: 15px;
-        }
-
-        .control-btn {
-            width: 40px;
-            height: 40px;
-            border-radius: 50%;
-            background: #374151;
-            border: none;
-            color: white;
-            cursor: pointer;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            transition: background-color 0.3s;
-        }
-
-        .control-btn:hover {
-            background: #4b5563;
-        }
-
-        .control-btn.primary {
-            background: #1db954;
-            width: 50px;
-            height: 50px;
-        }
-
-        .control-btn.primary:hover {
-            background: #1aa34a;
-        }
-
-        .volume-control {
-            display: flex;
-            align-items: center;
-            gap: 10px;
-        }
-
-        .volume-slider {
-            width: 100px;
-            height: 4px;
-            background: #374151;
-            border-radius: 2px;
-            outline: none;
-            cursor: pointer;
-        }
-
-        .volume-slider::-webkit-slider-thumb {
-            appearance: none;
-            width: 16px;
-            height: 16px;
-            background: #a855f7;
-            border-radius: 50%;
-            cursor: pointer;
-        }
-
         .loading {
             display: none;
             text-align: center;
-            padding: 20px;
+            padding: 30px;
             color: #d1d5db;
         }
 
@@ -475,37 +207,55 @@
             display: block;
         }
 
-        .progress-bar {
+        .error {
+            background: rgba(239, 68, 68, 0.2);
+            border: 1px solid rgba(239, 68, 68, 0.5);
+            padding: 15px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+            display: none;
+        }
+
+        .error.show {
+            display: block;
+        }
+
+        .setup-info {
+            background: rgba(59, 130, 246, 0.1);
+            border: 1px solid rgba(59, 130, 246, 0.3);
+            padding: 25px;
+            border-radius: 15px;
+            margin-bottom: 30px;
+        }
+
+        .credentials-form {
+            margin-top: 20px;
+        }
+
+        .credentials-form input {
             width: 100%;
-            height: 4px;
-            background: #374151;
-            border-radius: 2px;
-            margin: 10px 0;
-            cursor: pointer;
+            padding: 12px;
+            margin-bottom: 12px;
+            border: 1px solid #374151;
+            border-radius: 8px;
+            background: #1f2937;
+            color: white;
         }
 
-        .progress-fill {
-            height: 100%;
+        .credentials-form button {
+            width: 100%;
+            padding: 14px;
             background: #a855f7;
-            border-radius: 2px;
-            width: 0%;
-            transition: width 0.1s ease;
+            border: none;
+            border-radius: 8px;
+            color: white;
+            font-weight: 600;
+            cursor: pointer;
+            transition: background-color 0.3s;
         }
 
-        .time-display {
-            display: flex;
-            justify-content: space-between;
-            font-size: 0.8rem;
-            color: #9ca3af;
-        }
-
-        @keyframes pulse {
-            0%, 100% { opacity: 1; }
-            50% { opacity: 0.5; }
-        }
-
-        .playing-indicator {
-            animation: pulse 1.5s infinite;
+        .credentials-form button:hover {
+            background: #9333ea;
         }
     </style>
 </head>
@@ -513,220 +263,256 @@
     <div class="container">
         <div class="header">
             <h1 class="logo">Corriente Sound</h1>
-            <p class="subtitle">Start with a song, steer the current</p>
+            <p class="slogan">Play the current</p>
         </div>
 
-        <!-- Demo Notice -->
-        <div class="demo-notice">
-            <h3 style="margin-bottom: 15px;">🎧 Demo Mode</h3>
-            <p>This is a working demo with sample songs that you can actually play! Try selecting a song and generating a playlist.</p>
+        <!-- Setup Instructions -->
+        <div class="setup-info" id="setupInfo">
+            <h3 style="margin-bottom: 15px;">🎵 Spotify Setup</h3>
+            <p style="margin-bottom: 15px;">Enter your Spotify app credentials to get started:</p>
+            <ol style="margin-bottom: 20px; color: #d1d5db; line-height: 1.6;">
+                <li>Go to <a href="https://developer.spotify.com/dashboard" target="_blank" style="color: #a855f7;">developer.spotify.com/dashboard</a></li>
+                <li>Create a new app</li>
+                <li>Copy your Client ID and Client Secret</li>
+                <li>Add your current URL to Redirect URIs</li>
+            </ol>
+            
+            <div class="credentials-form">
+                <input type="text" id="clientId" placeholder="Spotify Client ID" />
+                <input type="password" id="clientSecret" placeholder="Spotify Client Secret" />
+                <button onclick="setupSpotify()">Continue</button>
+            </div>
+        </div>
+
+        <!-- Authentication Section -->
+        <div class="auth-section hidden" id="authSection">
+            <h2 style="margin-bottom: 20px;">Connect to Spotify</h2>
+            <p style="margin-bottom: 30px; color: #d1d5db;">
+                Connect your Spotify account to search and play music
+            </p>
+            <button class="spotify-btn" onclick="authenticateSpotify()">
+                🎵 Connect with Spotify
+            </button>
+        </div>
+
+        <!-- Error Display -->
+        <div class="error" id="errorDisplay"></div>
+
+        <!-- Loading Indicator -->
+        <div class="loading" id="loadingIndicator">
+            <div style="font-size: 2.5rem; margin-bottom: 15px;">🎵</div>
+            <p>Connecting to Spotify...</p>
         </div>
 
         <!-- Song Search Section -->
-        <div class="search-section">
-            <h2 style="margin-bottom: 15px; text-align: center;">Start with a song you love</h2>
+        <div class="search-section hidden" id="searchSection">
+            <h2 style="margin-bottom: 20px; text-align: center;">Search for a song</h2>
             <input 
                 type="text" 
                 class="search-input" 
                 id="songSearch"
-                placeholder="Try searching: billie eilish, taylor swift, the weeknd..."
+                placeholder="Search for any song on Spotify..."
             >
             
             <div id="searchResults" class="search-results"></div>
-
-            <!-- Selected Song Display -->
-            <div class="selected-song" id="selectedSong">
-                <div class="song-info">
-                    <div class="song-artwork-placeholder" id="artworkPlaceholder">🎵</div>
-                    <div class="song-details">
-                        <h3 id="selectedTitle">Song Title</h3>
-                        <p id="selectedArtist">Artist Name</p>
-                        <p id="selectedAlbum" style="font-size: 0.8rem; color: #9ca3af;"></p>
-                    </div>
-                </div>
-            </div>
-        </div>
-
-        <!-- Mood Selection Section -->
-        <div class="mood-section" id="moodSection">
-            <h2 class="mood-title">Where should we take this playlist?</h2>
-            <p class="mood-subtitle">Select the mood directions you want to explore</p>
-            
-            <div class="mood-buttons">
-                <button class="mood-btn" onclick="toggleMood(this, 'upbeat')">
-                    <span class="mood-icon">⚡</span>
-                    More Upbeat
-                </button>
-                <button class="mood-btn" onclick="toggleMood(this, 'chill')">
-                    <span class="mood-icon">🌊</span>
-                    More Chill
-                </button>
-                <button class="mood-btn" onclick="toggleMood(this, 'groovy')">
-                    <span class="mood-icon">🕺</span>
-                    More Groovy
-                </button>
-                <button class="mood-btn" onclick="toggleMood(this, 'romantic')">
-                    <span class="mood-icon">💕</span>
-                    More Romantic
-                </button>
-            </div>
-
-            <button class="generate-btn" id="generateBtn" onclick="generatePlaylist()">
-                🎯 Generate My Corriente Playlist
-            </button>
-        </div>
-
-        <!-- Generated Playlist Section -->
-        <div class="playlist-section" id="playlistSection">
-            <div class="playlist-header">
-                <h2 class="playlist-title">Your Corriente Playlist</h2>
-                <p class="playlist-meta" id="playlistMeta">Generating...</p>
-            </div>
-
-            <div class="playlist-tracks" id="playlistTracks"></div>
-        </div>
-
-        <!-- Loading Indicator -->
-        <div class="loading" id="loadingIndicator">
-            <div style="font-size: 2rem; margin-bottom: 10px;">🎵</div>
-            <p>Generating playlist...</p>
-        </div>
-    </div>
-
-    <!-- Music Player -->
-    <div class="player-section" id="playerSection">
-        <div class="player-content">
-            <div class="now-playing">
-                <div class="song-artwork-placeholder" id="nowPlayingArtwork">🎵</div>
-                <div class="now-playing-info">
-                    <h4 id="nowPlayingTitle">No song selected</h4>
-                    <p id="nowPlayingArtist">Choose a track to play</p>
-                    <div class="progress-bar" onclick="seekTo(event)">
-                        <div class="progress-fill" id="progressFill"></div>
-                    </div>
-                    <div class="time-display">
-                        <span id="currentTime">0:00</span>
-                        <span id="totalTime">0:00</span>
-                    </div>
-                </div>
-            </div>
-            
-            <div class="player-controls">
-                <button class="control-btn" onclick="previousTrack()">⏮️</button>
-                <button class="control-btn primary" id="playPauseBtn" onclick="togglePlayback()">▶️</button>
-                <button class="control-btn" onclick="nextTrack()">⏭️</button>
-            </div>
-            
-            <div class="volume-control">
-                <span>🔊</span>
-                <input type="range" class="volume-slider" id="volumeSlider" min="0" max="100" value="50" onchange="setVolume(this.value)">
-            </div>
         </div>
     </div>
 
     <script>
-        // Demo data - real songs with sample audio
-        const mockSongs = {
-            'billie': [
-                { id: '1', name: 'bad guy', artist: 'Billie Eilish', album: 'When We All Fall Asleep', audioUrl: 'https://www.soundjay.com/misc/sounds/bell-ringing-05.wav' },
-                { id: '2', name: 'lovely', artist: 'Billie Eilish & Khalid', album: 'lovely', audioUrl: 'https://www.soundjay.com/misc/sounds/bell-ringing-04.wav' }
-            ],
-            'taylor': [
-                { id: '3', name: 'Anti-Hero', artist: 'Taylor Swift', album: 'Midnights', audioUrl: 'https://www.soundjay.com/misc/sounds/bell-ringing-03.wav' },
-                { id: '4', name: 'Shake It Off', artist: 'Taylor Swift', album: '1989', audioUrl: 'https://www.soundjay.com/misc/sounds/bell-ringing-02.wav' }
-            ],
-            'weeknd': [
-                { id: '5', name: 'Blinding Lights', artist: 'The Weeknd', album: 'After Hours', audioUrl: 'https://www.soundjay.com/misc/sounds/bell-ringing-01.wav' },
-                { id: '6', name: 'Can\'t Feel My Face', artist: 'The Weeknd', album: 'Beauty Behind the Madness', audioUrl: 'https://www.soundjay.com/misc/sounds/bell-ringing-05.wav' }
-            ]
+        // Spotify configuration
+        let spotifyConfig = {
+            clientId: '',
+            clientSecret: '',
+            accessToken: '',
+            userToken: '',
+            redirectUri: window.location.origin
         };
 
-        // Mock recommendation engine
-        const moodPlaylists = {
-            upbeat: [
-                { id: '101', name: 'Levitating', artist: 'Dua Lipa', album: 'Future Nostalgia', mood: 'upbeat', audioUrl: 'https://www.soundjay.com/misc/sounds/bell-ringing-04.wav' },
-                { id: '102', name: 'As It Was', artist: 'Harry Styles', album: 'Harry\'s House', mood: 'upbeat', audioUrl: 'https://www.soundjay.com/misc/sounds/bell-ringing-03.wav' },
-                { id: '103', name: 'Good 4 U', artist: 'Olivia Rodrigo', album: 'SOUR', mood: 'upbeat', audioUrl: 'https://www.soundjay.com/misc/sounds/bell-ringing-02.wav' }
-            ],
-            chill: [
-                { id: '201', name: 'Strawberry Fields Forever', artist: 'The Beatles', album: 'Magical Mystery Tour', mood: 'chill', audioUrl: 'https://www.soundjay.com/misc/sounds/bell-ringing-01.wav' },
-                { id: '202', name: 'Moonlight', artist: 'XXXTentacion', album: '17', mood: 'chill', audioUrl: 'https://www.soundjay.com/misc/sounds/bell-ringing-05.wav' },
-                { id: '203', name: 'Amber', artist: '311', album: '311', mood: 'chill', audioUrl: 'https://www.soundjay.com/misc/sounds/bell-ringing-04.wav' }
-            ],
-            groovy: [
-                { id: '301', name: 'Uptown Funk', artist: 'Mark Ronson ft. Bruno Mars', album: 'Uptown Special', mood: 'groovy', audioUrl: 'https://www.soundjay.com/misc/sounds/bell-ringing-03.wav' },
-                { id: '302', name: 'I Want Your Love', artist: 'Chic', album: 'C\'est Chic', mood: 'groovy', audioUrl: 'https://www.soundjay.com/misc/sounds/bell-ringing-02.wav' },
-                { id: '303', name: '24K Magic', artist: 'Bruno Mars', album: '24K Magic', mood: 'groovy', audioUrl: 'https://www.soundjay.com/misc/sounds/bell-ringing-01.wav' }
-            ],
-            romantic: [
-                { id: '401', name: 'Perfect', artist: 'Ed Sheeran', album: '÷ (Divide)', mood: 'romantic', audioUrl: 'https://www.soundjay.com/misc/sounds/bell-ringing-05.wav' },
-                { id: '402', name: 'All of Me', artist: 'John Legend', album: 'Love in the Future', mood: 'romantic', audioUrl: 'https://www.soundjay.com/misc/sounds/bell-ringing-04.wav' },
-                { id: '403', name: 'Thinking Out Loud', artist: 'Ed Sheeran', album: 'x', mood: 'romantic', audioUrl: 'https://www.soundjay.com/misc/sounds/bell-ringing-03.wav' }
-            ]
-        };
-
-        // App state
-        let selectedMoods = [];
-        let currentSong = null;
         let searchTimeout = null;
-        let currentPlaylist = [];
-        let currentTrackIndex = 0;
-        let isPlaying = false;
-        let currentAudio = null;
 
-        // Search functionality
+        // Setup Spotify credentials
+        function setupSpotify() {
+            const clientId = document.getElementById('clientId').value.trim();
+            const clientSecret = document.getElementById('clientSecret').value.trim();
+            
+            if (!clientId || !clientSecret) {
+                showError('Please enter both Client ID and Client Secret');
+                return;
+            }
+
+            spotifyConfig.clientId = clientId;
+            spotifyConfig.clientSecret = clientSecret;
+            
+            // Hide setup, show auth
+            document.getElementById('setupInfo').style.display = 'none';
+            document.getElementById('authSection').classList.remove('hidden');
+        }
+
+        // Authenticate with Spotify
+        async function authenticateSpotify() {
+            const scopes = 'streaming user-read-email user-read-private user-read-playback-state user-modify-playback-state';
+            const authUrl = `https://accounts.spotify.com/authorize?response_type=code&client_id=${spotifyConfig.clientId}&scope=${encodeURIComponent(scopes)}&redirect_uri=${encodeURIComponent(spotifyConfig.redirectUri)}`;
+            
+            window.location.href = authUrl;
+        }
+
+        // Handle Spotify callback
+        async function handleSpotifyCallback(code) {
+            try {
+                showLoading(true);
+                
+                const response = await fetch('https://accounts.spotify.com/api/token', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/x-www-form-urlencoded',
+                        'Authorization': 'Basic ' + btoa(spotifyConfig.clientId + ':' + spotifyConfig.clientSecret)
+                    },
+                    body: new URLSearchParams({
+                        grant_type: 'authorization_code',
+                        code: code,
+                        redirect_uri: spotifyConfig.redirectUri
+                    })
+                });
+
+                if (!response.ok) {
+                    throw new Error('Authentication failed');
+                }
+
+                const data = await response.json();
+                spotifyConfig.userToken = data.access_token;
+                
+                // Also get client credentials for search
+                await getClientToken();
+                
+                // Show search section
+                document.getElementById('authSection').classList.add('hidden');
+                document.getElementById('searchSection').classList.remove('hidden');
+                
+                showLoading(false);
+                
+            } catch (error) {
+                showError('Authentication failed: ' + error.message);
+                showLoading(false);
+            }
+        }
+
+        // Get client credentials token for search
+        async function getClientToken() {
+            const response = await fetch('https://accounts.spotify.com/api/token', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/x-www-form-urlencoded',
+                    'Authorization': 'Basic ' + btoa(spotifyConfig.clientId + ':' + spotifyConfig.clientSecret)
+                },
+                body: 'grant_type=client_credentials'
+            });
+
+            if (response.ok) {
+                const data = await response.json();
+                spotifyConfig.accessToken = data.access_token;
+            }
+        }
+
+        // Search Spotify
+        async function searchSpotify(query) {
+            try {
+                const response = await fetch(`https://api.spotify.com/v1/search?q=${encodeURIComponent(query)}&type=track&limit=10`, {
+                    headers: {
+                        'Authorization': 'Bearer ' + spotifyConfig.accessToken
+                    }
+                });
+
+                if (!response.ok) {
+                    throw new Error('Search failed');
+                }
+
+                const data = await response.json();
+                return data.tracks.items;
+            } catch (error) {
+                showError('Search failed: ' + error.message);
+                return [];
+            }
+        }
+
+        // Play track using Spotify Web API
+        async function playTrack(trackUri) {
+            try {
+                const response = await fetch('https://api.spotify.com/v1/me/player/play', {
+                    method: 'PUT',
+                    headers: {
+                        'Authorization': 'Bearer ' + spotifyConfig.userToken,
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        uris: [trackUri]
+                    })
+                });
+
+                if (response.ok) {
+                    console.log('Playing track:', trackUri);
+                } else if (response.status === 404) {
+                    showError('No active Spotify device found. Please open Spotify on your device first.');
+                } else {
+                    showError('Playback failed. Make sure Spotify is open on your device.');
+                }
+                
+            } catch (error) {
+                showError('Playback error: ' + error.message);
+            }
+        }
+
+        // Search input handler
         document.addEventListener('DOMContentLoaded', function() {
             const searchInput = document.getElementById('songSearch');
             
-            // Show player immediately for demo
-            document.getElementById('playerSection').classList.add('show');
-            
             searchInput.addEventListener('input', function(e) {
-                const query = e.target.value.trim().toLowerCase();
+                const query = e.target.value.trim();
                 
                 if (searchTimeout) {
                     clearTimeout(searchTimeout);
                 }
                 
-                if (query.length > 1) {
+                if (query.length > 2) {
                     searchTimeout = setTimeout(() => {
                         performSearch(query);
-                    }, 300);
+                    }, 500);
                 } else {
                     document.getElementById('searchResults').classList.remove('show');
                 }
             });
+
+            // Check for Spotify callback
+            const urlParams = new URLSearchParams(window.location.search);
+            const code = urlParams.get('code');
+            if (code) {
+                handleSpotifyCallback(code);
+                // Clean up URL
+                window.history.replaceState({}, document.title, window.location.pathname);
+            }
         });
 
-        function performSearch(query) {
+        async function performSearch(query) {
+            const tracks = await searchSpotify(query);
             const resultsDiv = document.getElementById('searchResults');
-            let results = [];
             
-            // Search through mock data
-            Object.values(mockSongs).forEach(songList => {
-                songList.forEach(song => {
-                    if (song.name.toLowerCase().includes(query) || 
-                        song.artist.toLowerCase().includes(query)) {
-                        results.push(song);
-                    }
-                });
-            });
-            
-            if (results.length > 0) {
+            if (tracks && tracks.length > 0) {
                 resultsDiv.innerHTML = '';
                 
-                results.forEach(song => {
+                tracks.forEach(track => {
                     const trackDiv = document.createElement('div');
                     trackDiv.className = 'track-item';
-                    trackDiv.onclick = () => selectSong(song);
+                    
+                    const artwork = track.album.images.length > 0 ? 
+                        `<img src="${track.album.images[2]?.url || track.album.images[0]?.url}" class="track-artwork" />` :
+                        `<div class="track-artwork-placeholder">🎵</div>`;
                     
                     trackDiv.innerHTML = `
-                        <span class="track-number">🎵</span>
-                        <div class="track-artwork-placeholder">🎵</div>
+                        ${artwork}
                         <div class="track-info">
-                            <div class="track-title">${song.name}</div>
-                            <div class="track-artist">${song.artist}</div>
+                            <div class="track-title">${track.name}</div>
+                            <div class="track-artist">${track.artists[0].name}</div>
                         </div>
+                        <button class="play-btn" onclick="playTrack('${track.uri}')">▶️</button>
                     `;
                     
                     resultsDiv.appendChild(trackDiv);
@@ -734,104 +520,30 @@
                 
                 resultsDiv.classList.add('show');
             } else {
-                resultsDiv.innerHTML = '<p style="padding: 20px; text-align: center; color: #9ca3af;">No songs found. Try "billie", "taylor", or "weeknd"</p>';
+                resultsDiv.innerHTML = '<p style="padding: 20px; text-align: center; color: #9ca3af;">No results found</p>';
                 resultsDiv.classList.add('show');
             }
         }
 
-        function selectSong(song) {
-            currentSong = song;
-            
-            // Update selected song display
-            document.getElementById('selectedTitle').textContent = song.name;
-            document.getElementById('selectedArtist').textContent = song.artist;
-            document.getElementById('selectedAlbum').textContent = song.album;
-            
-            document.getElementById('selectedSong').classList.add('show');
-            document.getElementById('moodSection').classList.add('show');
-            
-            // Hide search results
-            document.getElementById('searchResults').classList.remove('show');
-            
-            // Scroll to mood section
-            document.getElementById('moodSection').scrollIntoView({ behavior: 'smooth' });
-        }
-
-        function toggleMood(button, moodType) {
-            if (button.classList.contains('selected')) {
-                button.classList.remove('selected');
-                selectedMoods = selectedMoods.filter(m => m !== moodType);
+        // Utility functions
+        function showLoading(show) {
+            const loading = document.getElementById('loadingIndicator');
+            if (show) {
+                loading.classList.add('show');
             } else {
-                button.classList.add('selected');
-                selectedMoods.push(moodType);
-            }
-
-            const generateBtn = document.getElementById('generateBtn');
-            if (selectedMoods.length > 0) {
-                generateBtn.classList.add('show');
-            } else {
-                generateBtn.classList.remove('show');
+                loading.classList.remove('show');
             }
         }
 
-        function generatePlaylist() {
-            if (selectedMoods.length === 0 || !currentSong) return;
-
-            showLoading(true);
+        function showError(message) {
+            const errorDiv = document.getElementById('errorDisplay');
+            errorDiv.textContent = message;
+            errorDiv.classList.add('show');
             
             setTimeout(() => {
-                // Build playlist with original song + mood-based recommendations
-                currentPlaylist = [currentSong];
-                
-                selectedMoods.forEach(mood => {
-                    const moodSongs = moodPlaylists[mood] || [];
-                    // Add 2-3 songs per selected mood
-                    currentPlaylist.push(...moodSongs.slice(0, 3));
-                });
-
-                // Shuffle recommendations but keep original song first
-                const recommendations = currentPlaylist.slice(1);
-                for (let i = recommendations.length - 1; i > 0; i--) {
-                    const j = Math.floor(Math.random() * (i + 1));
-                    [recommendations[i], recommendations[j]] = [recommendations[j], recommendations[i]];
-                }
-                currentPlaylist = [currentSong, ...recommendations.slice(0, 8)];
-
-                displayPlaylist();
-                showLoading(false);
-            }, 1500);
+                errorDiv.classList.remove('show');
+            }, 5000);
         }
-
-        function displayPlaylist() {
-            const tracksDiv = document.getElementById('playlistTracks');
-            const metaDiv = document.getElementById('playlistMeta');
-            
-            tracksDiv.innerHTML = '';
-            metaDiv.textContent = `${currentPlaylist.length} songs • Generated with moods: ${selectedMoods.join(', ')}`;
-
-            currentPlaylist.forEach((track, index) => {
-                const trackDiv = document.createElement('div');
-                trackDiv.className = 'track-item';
-                
-                const moodTag = index === 0 ? 'original' : (track.mood || selectedMoods[0]);
-                const moodClass = `mood-${moodTag}`;
-                
-                trackDiv.innerHTML = `
-                    <span class="track-number">${index + 1}</span>
-                    <div class="track-artwork-placeholder">🎵</div>
-                    <div class="track-info">
-                        <div class="track-title">${track.name}</div>
-                        <div class="track-artist">${track.artist}</div>
-                    </div>
-                    <span class="mood-tag ${moodClass}">${moodTag}</span>
-                    <button class="play-btn" onclick="playTrack(${index})">▶️</button>
-                `;
-                
-                tracksDiv.appendChild(trackDiv);
-            });
-
-            document.getElementById('playlistSection').classList.add('show');
-            document.getElementById('playlistSection').scrollIntoView({ behavior: 'smooth' });
-        }
-
-        // Audio
+    </script>
+</body>
+</html>
