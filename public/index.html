@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Corriente Sound - Spotify API Integration</title>
+    <title>Corriente Sound - Music Discovery with ReccoBeats</title>
     <style>
         * {
             margin: 0;
@@ -184,6 +184,52 @@
         .play-btn:disabled {
             opacity: 0.5;
             cursor: not-allowed;
+        }
+
+        /* New audio features debug section */
+        .audio-features-debug {
+            display: none;
+            background: rgba(15, 23, 42, 0.8);
+            border: 1px solid rgba(3, 252, 165, 0.2);
+            border-radius: 8px;
+            padding: 15px;
+            margin-top: 15px;
+            font-family: 'Courier New', monospace;
+        }
+
+        .audio-features-debug.show {
+            display: block;
+        }
+
+        .debug-header {
+            color: #03fca5;
+            font-weight: bold;
+            margin-bottom: 10px;
+            font-size: 0.9rem;
+        }
+
+        .feature-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+            gap: 8px;
+            font-size: 0.8rem;
+        }
+
+        .feature-item {
+            background: rgba(31, 41, 55, 0.5);
+            padding: 8px;
+            border-radius: 6px;
+            display: flex;
+            justify-content: space-between;
+        }
+
+        .feature-name {
+            color: #9ca3af;
+        }
+
+        .feature-value {
+            color: #03fca5;
+            font-weight: bold;
         }
 
         .mood-section {
@@ -392,23 +438,47 @@
         .error.show {
             display: block;
         }
+
+        .service-status {
+            position: fixed;
+            bottom: 20px;
+            right: 20px;
+            background: rgba(31, 41, 55, 0.95);
+            padding: 12px;
+            border-radius: 8px;
+            font-size: 0.8rem;
+            color: #d1d5db;
+            border: 1px solid rgba(3, 252, 165, 0.3);
+            z-index: 1000;
+        }
+
+        .service-status .status-item {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            margin-bottom: 4px;
+        }
+
+        .service-status .status-item:last-child {
+            margin-bottom: 0;
+        }
     </style>
 </head>
 <body>
     <div class="container">
         <div class="header">
             <h1 class="logo">Corriente Sound</h1>
-            <p class="subtitle">Play your current</p>
+            <p class="subtitle">Start with a song, steer the current</p>
         </div>
 
         <!-- Authentication Section -->
         <div class="auth-section" id="authSection">
-            <h2 style="margin-bottom: 20px;">Connect Your Spotify Account</h2>
+            <h2 style="margin-bottom: 20px;">Connect to Music Services</h2>
             <p style="margin-bottom: 25px; color: #d1d5db;">
-                We need access to search songs and get audio features for mood analysis.
+                We use Spotify for song search and ReccoBeats for advanced audio analysis and mood detection.
             </p>
             <button class="spotify-btn" onclick="authenticateSpotify()">
-                🎵 Connect with Spotify
+                🎵 Connect Music Services
             </button>
         </div>
 
@@ -447,6 +517,14 @@
                     <button class="play-btn" id="playBtn" onclick="togglePlay()">
                         <span id="playIcon">▶️</span>
                     </button>
+                </div>
+
+                <!-- Audio Features Debug Section -->
+                <div class="audio-features-debug" id="audioFeaturesDebug">
+                    <div class="debug-header">🎯 ReccoBeats Audio Features Analysis</div>
+                    <div class="feature-grid" id="featureGrid">
+                        <!-- Features will be populated here -->
+                    </div>
                 </div>
             </div>
         </div>
@@ -493,18 +571,54 @@
         </div>
     </div>
 
+    <!-- Service Status Indicator -->
+    <div class="service-status" id="serviceStatus" style="display: none;">
+        <div class="status-item">🔍 <span>Search: Spotify</span></div>
+        <div class="status-item">🎯 <span>Analysis: ReccoBeats</span></div>
+    </div>
+
     <script>
-        // API Configuration - Now points to our backend
+        // API Configuration - Now points to our backend with ReccoBeats integration
         const API_BASE = window.location.origin.includes('localhost') ? 
             'http://localhost:3001/api' : '/api';
 
         let isAuthenticated = false;
         let selectedMoods = [];
         let currentSong = null;
+        let currentAudioFeatures = null; // Store current song's features
         let searchTimeout = null;
         let currentAudio = null;
 
-        // Authenticate with backend (which handles Spotify)
+        // Enhanced error handling for ReccoBeats integration
+        function showError(message, details = null) {
+            const errorDiv = document.getElementById('errorDisplay');
+            
+            // Enhanced error messages for better user experience
+            let displayMessage = message;
+            
+            if (message.includes('Failed to get audio features')) {
+                displayMessage = 'Unable to analyze this song\'s mood characteristics. Please try a different track.';
+            } else if (message.includes('Failed to generate recommendations')) {
+                displayMessage = 'Could not generate playlist recommendations. Please try again with a different song.';
+            } else if (message.includes('Search failed')) {
+                displayMessage = 'Song search is temporarily unavailable. Please try again.';
+            }
+            
+            errorDiv.textContent = displayMessage;
+            errorDiv.classList.add('show');
+            
+            // Log detailed error for debugging
+            if (details) {
+                console.error('Detailed error:', details);
+            }
+            
+            // Auto-hide after 7 seconds (longer for integration issues)
+            setTimeout(() => {
+                errorDiv.classList.remove('show');
+            }, 7000);
+        }
+
+        // Enhanced authentication with service information
         async function authenticateSpotify() {
             showLoading(true);
             
@@ -514,7 +628,8 @@
                 });
 
                 if (!response.ok) {
-                    throw new Error('Authentication failed');
+                    const errorData = await response.json().catch(() => ({}));
+                    throw new Error(errorData.error || 'Authentication failed');
                 }
 
                 const data = await response.json();
@@ -525,22 +640,27 @@
                     document.getElementById('authSection').classList.add('hidden');
                     document.getElementById('searchSection').classList.remove('hidden');
                     
-                    console.log('Spotify authenticated successfully!');
+                    console.log('✅ Music services connected successfully!');
+                    console.log('🎵 Search: Spotify API');
+                    console.log('🎯 Analysis: ReccoBeats API');
+                    
+                    // Show service status briefly
+                    showServiceStatus();
                 } else {
                     throw new Error(data.error || 'Authentication failed');
                 }
                 
             } catch (error) {
-                showError('Failed to authenticate with Spotify: ' + error.message);
+                showError('Failed to connect to music services: ' + error.message);
             }
             
             showLoading(false);
         }
 
-        // Search for songs via backend
+        // Search for songs via backend (Spotify)
         async function searchSpotify(query) {
             if (!isAuthenticated) {
-                showError('Not authenticated with Spotify');
+                showError('Not authenticated with music services');
                 return [];
             }
 
@@ -548,7 +668,8 @@
                 const response = await fetch(`${API_BASE}/search?q=${encodeURIComponent(query)}`);
 
                 if (!response.ok) {
-                    throw new Error('Search request failed');
+                    const errorData = await response.json().catch(() => ({}));
+                    throw new Error(errorData.error || 'Search request failed');
                 }
 
                 const tracks = await response.json();
@@ -559,30 +680,103 @@
             }
         }
 
-        // Get audio features via backend
+        // Enhanced audio features fetching with better error handling and debug display
         async function getAudioFeatures(trackId) {
             try {
+                console.log(`🎯 Getting audio features for track: ${trackId}`);
+                
                 const response = await fetch(`${API_BASE}/audio-features/${trackId}`);
 
                 if (!response.ok) {
-                    throw new Error('Failed to get audio features');
+                    const errorData = await response.json().catch(() => ({}));
+                    throw new Error(errorData.error || `HTTP ${response.status}: Failed to get audio features`);
                 }
 
-                return await response.json();
+                const features = await response.json();
+                
+                // Validate that we got the expected audio features
+                const requiredFeatures = ['energy', 'danceability', 'valence', 'tempo'];
+                const missingFeatures = requiredFeatures.filter(feature => 
+                    features[feature] === undefined || features[feature] === null
+                );
+                
+                if (missingFeatures.length > 0) {
+                    console.warn('Missing audio features:', missingFeatures);
+                    showError('This song has incomplete analysis data. Try a different track.');
+                    return null;
+                }
+                
+                console.log('✅ Audio features received:', features);
+                
+                // Store features and update debug display
+                currentAudioFeatures = features;
+                updateAudioFeaturesDebug(features);
+                
+                return features;
+                
             } catch (error) {
                 console.error('Audio features error:', error);
+                showError('Failed to analyze song characteristics: ' + error.message);
                 return null;
             }
         }
 
-        // Get recommendations based on mood via backend
+        // Display audio features in debug section
+        function updateAudioFeaturesDebug(features) {
+            const debugSection = document.getElementById('audioFeaturesDebug');
+            const featureGrid = document.getElementById('featureGrid');
+            
+            // Clear previous content
+            featureGrid.innerHTML = '';
+            
+            // Define feature display names and formatting
+            const featureDefinitions = {
+                'acousticness': { name: 'Acoustic', format: (v) => (v * 100).toFixed(1) + '%' },
+                'danceability': { name: 'Danceable', format: (v) => (v * 100).toFixed(1) + '%' },
+                'energy': { name: 'Energy', format: (v) => (v * 100).toFixed(1) + '%' },
+                'instrumentalness': { name: 'Instrumental', format: (v) => (v * 100).toFixed(1) + '%' },
+                'liveness': { name: 'Live', format: (v) => (v * 100).toFixed(1) + '%' },
+                'loudness': { name: 'Loudness', format: (v) => v.toFixed(1) + 'dB' },
+                'speechiness': { name: 'Speech', format: (v) => (v * 100).toFixed(1) + '%' },
+                'tempo': { name: 'Tempo', format: (v) => Math.round(v) + ' BPM' },
+                'valence': { name: 'Positivity', format: (v) => (v * 100).toFixed(1) + '%' }
+            };
+            
+            // Create feature items
+            Object.entries(features).forEach(([key, value]) => {
+                if (featureDefinitions[key] && value !== undefined && value !== null) {
+                    const featureItem = document.createElement('div');
+                    featureItem.className = 'feature-item';
+                    
+                    const definition = featureDefinitions[key];
+                    featureItem.innerHTML = `
+                        <span class="feature-name">${definition.name}</span>
+                        <span class="feature-value">${definition.format(value)}</span>
+                    `;
+                    
+                    featureGrid.appendChild(featureItem);
+                }
+            });
+            
+            // Show debug section
+            debugSection.classList.add('show');
+        }
+
+        // Enhanced recommendation generation with ReccoBeats
         async function getRecommendations(seedTrackId, moods) {
             try {
-                // Get current song's audio features
-                const features = await getAudioFeatures(seedTrackId);
-                if (!features) return [];
+                console.log(`🎵 Getting recommendations for ${seedTrackId} with moods: ${moods.join(', ')}`);
+                
+                // Use stored features if available, otherwise fetch them
+                let features = currentAudioFeatures;
+                if (!features) {
+                    features = await getAudioFeatures(seedTrackId);
+                    if (!features) {
+                        throw new Error('Could not analyze seed track');
+                    }
+                }
 
-                // Calculate target features based on selected moods
+                // Calculate target features based on selected moods (same logic as before)
                 let targetFeatures = {
                     seed_tracks: seedTrackId,
                     limit: 9,
@@ -613,25 +807,38 @@
                     }
                 });
 
+                // Log target features for debugging
+                console.log('Target features:', targetFeatures);
+
                 // Build query string for backend
                 const queryParams = new URLSearchParams(targetFeatures);
                 
                 const response = await fetch(`${API_BASE}/recommendations?${queryParams}`);
 
                 if (!response.ok) {
-                    throw new Error('Failed to get recommendations');
+                    const errorData = await response.json().catch(() => ({}));
+                    throw new Error(errorData.error || 'Failed to get recommendations');
                 }
 
                 const tracks = await response.json();
+                
+                // Validate that we got actual tracks back
+                if (!Array.isArray(tracks) || tracks.length === 0) {
+                    console.warn('No recommendations returned');
+                    return [];
+                }
+                
+                console.log(`✅ Got ${tracks.length} recommendations`);
                 return tracks;
+                
             } catch (error) {
                 console.error('Recommendations error:', error);
-                showError('Failed to generate recommendations: ' + error.message);
+                showError('Failed to generate playlist: ' + error.message);
                 return [];
             }
         }
 
-        // Auto-start if credentials are provided
+        // Initialize search functionality
         document.addEventListener('DOMContentLoaded', function() {
             const searchInput = document.getElementById('songSearch');
             
@@ -663,16 +870,7 @@
             if (tracks && tracks.length > 0) {
                 resultsDiv.innerHTML = '';
                 
-                console.log('Full search results:', tracks);
-                
                 tracks.forEach((track, index) => {
-                    console.log(`Track ${index + 1}:`, {
-                        name: track.name,
-                        artist: track.artists[0].name,
-                        preview_url: track.preview_url,
-                        external_urls: track.external_urls
-                    });
-                    
                     const trackDiv = document.createElement('div');
                     trackDiv.className = 'track-item';
                     trackDiv.onclick = () => selectSong(track);
@@ -705,8 +903,9 @@
             showLoading(false);
         }
 
-        function selectSong(track) {
+        async function selectSong(track) {
             currentSong = track;
+            currentAudioFeatures = null; // Reset features
             
             // Stop any currently playing audio
             if (currentAudio) {
@@ -730,31 +929,45 @@
                 artworkPlaceholder.style.display = 'none';
             }
             
-            // Debug: Log preview URL availability
-            console.log('Selected song preview URL:', track.preview_url);
-            
             // Enable/disable play button based on preview availability
             const playBtn = document.getElementById('playBtn');
             if (track.preview_url) {
                 playBtn.disabled = false;
                 playBtn.style.opacity = '1';
                 playBtn.title = 'Play 30-second preview';
-                console.log('Play button enabled - preview available');
             } else {
                 playBtn.disabled = true;
                 playBtn.style.opacity = '0.5';
                 playBtn.title = 'No preview available for this song';
-                console.log('Play button disabled - no preview available');
             }
             
+            // Show selected song
             document.getElementById('selectedSong').classList.add('show');
-            document.getElementById('moodSection').classList.add('show');
             
             // Hide search results
             document.getElementById('searchResults').classList.remove('show');
             
-            // Scroll to mood section
-            document.getElementById('moodSection').scrollIntoView({ behavior: 'smooth' });
+            // Get audio features immediately and show debug info
+            console.log('🎯 Fetching audio features for selected song...');
+            showLoading(true);
+            
+            try {
+                const features = await getAudioFeatures(track.id);
+                if (features) {
+                    // Show mood section after successful feature extraction
+                    document.getElementById('moodSection').classList.add('show');
+                    
+                    // Scroll to mood section
+                    document.getElementById('moodSection').scrollIntoView({ behavior: 'smooth' });
+                } else {
+                    showError('Could not analyze this song. Please try a different track.');
+                }
+            } catch (error) {
+                console.error('Error getting audio features:', error);
+                showError('Failed to analyze song: ' + error.message);
+            } finally {
+                showLoading(false);
+            }
         }
 
         function toggleMood(button, moodType) {
@@ -775,14 +988,28 @@
             }
         }
 
+        // Enhanced playlist generation with better feedback
         async function generatePlaylist() {
             if (selectedMoods.length === 0 || !currentSong) return;
 
             showLoading(true);
             
+            // Update UI to show progress
+            const playlistSection = document.getElementById('playlistSection');
+            const metaDiv = document.getElementById('playlistMeta');
+            metaDiv.textContent = 'Analyzing song and generating recommendations...';
+            playlistSection.classList.add('show');
+            playlistSection.scrollIntoView({ behavior: 'smooth' });
+            
             try {
-                // Get recommendations from Spotify
+                // Get recommendations using ReccoBeats backend
                 const recommendations = await getRecommendations(currentSong.id, selectedMoods);
+                
+                if (recommendations.length === 0) {
+                    metaDiv.textContent = 'Could not generate recommendations for this song. Try a different track or mood combination.';
+                    showError('No recommendations available for this combination');
+                    return;
+                }
                 
                 // Build playlist (original song + recommendations)
                 const playlist = [currentSong, ...recommendations];
@@ -791,10 +1018,12 @@
                 displayPlaylist(playlist);
                 
             } catch (error) {
+                console.error('Playlist generation failed:', error);
+                metaDiv.textContent = 'Playlist generation failed. Please try again.';
                 showError('Failed to generate playlist: ' + error.message);
+            } finally {
+                showLoading(false);
             }
-            
-            showLoading(false);
         }
 
         function displayPlaylist(playlist) {
@@ -802,14 +1031,14 @@
             const metaDiv = document.getElementById('playlistMeta');
             
             tracksDiv.innerHTML = '';
-            metaDiv.textContent = `${playlist.length} songs • Generated with moods: ${selectedMoods.join(', ')}`;
+            metaDiv.textContent = `${playlist.length} songs • Generated with moods: ${selectedMoods.join(', ')} • Powered by ReccoBeats`;
 
             playlist.forEach((track, index) => {
                 const trackDiv = document.createElement('div');
                 trackDiv.className = 'track-item';
-                trackDiv.onclick = () => openInSpotify(track.external_urls.spotify);
+                trackDiv.onclick = () => openInSpotify(track.external_urls?.spotify || '#');
                 
-                const artwork = track.album.images.length > 0 ? 
+                const artwork = track.album?.images?.length > 0 ? 
                     `<img src="${track.album.images[2]?.url || track.album.images[0]?.url}" class="track-artwork" />` :
                     `<div class="track-artwork-placeholder">🎵</div>`;
                 
@@ -821,8 +1050,8 @@
                     <span class="track-number">${index + 1}</span>
                     ${artwork}
                     <div class="track-info">
-                        <div class="track-title">${track.name}</div>
-                        <div class="track-artist">${track.artists[0].name}</div>
+                        <div class="track-title">${track.name || 'Unknown Track'}</div>
+                        <div class="track-artist">${track.artists?.[0]?.name || 'Unknown Artist'}</div>
                     </div>
                     <span class="mood-tag ${moodClass}">${moodTag}</span>
                 `;
@@ -836,15 +1065,13 @@
         }
 
         function openInSpotify(url) {
-            window.open(url, '_blank');
+            if (url && url !== '#') {
+                window.open(url, '_blank');
+            }
         }
 
         // Play/pause functionality
         function togglePlay() {
-            console.log('Play button clicked');
-            console.log('Current song:', currentSong);
-            console.log('Preview URL:', currentSong?.preview_url);
-            
             if (!currentSong) {
                 showError('No song selected');
                 return;
@@ -857,7 +1084,6 @@
 
             if (currentAudio && !currentAudio.paused) {
                 // Pause current audio
-                console.log('Pausing audio');
                 currentAudio.pause();
                 updatePlayButton(false);
             } else {
@@ -865,14 +1091,11 @@
                 if (currentAudio) {
                     currentAudio.pause();
                 }
-
-                console.log('Starting audio playback:', currentSong.preview_url);
                 
                 // Play new audio
                 currentAudio = new Audio(currentSong.preview_url);
                 
                 currentAudio.play().then(() => {
-                    console.log('Audio playing successfully');
                     updatePlayButton(true);
                 }).catch(error => {
                     console.error('Audio play error:', error);
@@ -881,7 +1104,6 @@
 
                 // Handle audio end
                 currentAudio.addEventListener('ended', () => {
-                    console.log('Audio ended');
                     updatePlayButton(false);
                 });
                 
@@ -897,7 +1119,17 @@
         function updatePlayButton(isPlaying) {
             const playIcon = document.getElementById('playIcon');
             playIcon.textContent = isPlaying ? '⏸️' : '▶️';
-            console.log('Play button updated:', isPlaying ? 'playing' : 'paused');
+        }
+
+        // Show service status indicator
+        function showServiceStatus() {
+            const statusDiv = document.getElementById('serviceStatus');
+            statusDiv.style.display = 'block';
+            
+            // Auto-hide after 5 seconds
+            setTimeout(() => {
+                statusDiv.style.display = 'none';
+            }, 5000);
         }
 
         // Utility functions
@@ -910,17 +1142,6 @@
             }
         }
 
-        function showError(message) {
-            const errorDiv = document.getElementById('errorDisplay');
-            errorDiv.textContent = message;
-            errorDiv.classList.add('show');
-            
-            // Auto-hide after 5 seconds
-            setTimeout(() => {
-                errorDiv.classList.remove('show');
-            }, 5000);
-        }
-
         // Handle URL parameters for Spotify callback
         window.addEventListener('load', function() {
             const params = new URLSearchParams(window.location.search);
@@ -930,6 +1151,9 @@
                 // Handle Spotify callback (for future user auth)
                 console.log('Spotify callback code:', code);
             }
+            
+            // Show initial service status
+            setTimeout(showServiceStatus, 1000);
         });
     </script>
 </body>
