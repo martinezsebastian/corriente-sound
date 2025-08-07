@@ -106,6 +106,104 @@ app.get('/api/health', (req, res) => {
     });
 });
 
+// Add this AFTER the health check route but BEFORE the auth route
+app.get('/api/test-reccobeats/:trackId', async (req, res) => {
+    const { trackId } = req.params;
+    
+    try {
+        console.log('🧪 Testing ReccoBeats with track ID:', trackId);
+        
+        // Try different possible URLs for ReccoBeats API
+        const testUrls = [
+            `https://api.reccobeats.com/v1/track/${trackId}/audio-features`,
+            `https://reccobeats.com/api/v1/track/${trackId}/audio-features`, 
+            `https://api.reccobeats.com/track/${trackId}/audio-features`,
+            `https://reccobeats.com/v1/track/${trackId}/audio-features`
+        ];
+        
+        const results = [];
+        
+        for (let i = 0; i < testUrls.length; i++) {
+            const url = testUrls[i];
+            try {
+                console.log(`Testing URL ${i + 1}:`, url);
+                
+                const response = await fetch(url, {
+                    method: 'GET',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'User-Agent': 'Corriente-Sound-Test/1.0'
+                    }
+                });
+                
+                console.log(`URL ${i + 1} Response status:`, response.status);
+                
+                const result = {
+                    url: url,
+                    status: response.status,
+                    statusText: response.statusText,
+                    headers: Object.fromEntries(response.headers.entries())
+                };
+                
+                if (response.ok) {
+                    try {
+                        const data = await response.json();
+                        result.data = data;
+                        result.success = true;
+                        
+                        // If we found a working URL, return immediately
+                        return res.json({
+                            success: true,
+                            workingUrl: url,
+                            result: result,
+                            message: 'Found working ReccoBeats endpoint!'
+                        });
+                    } catch (jsonError) {
+                        result.error = 'Response not JSON: ' + jsonError.message;
+                        result.success = false;
+                    }
+                } else {
+                    try {
+                        const errorText = await response.text();
+                        result.errorBody = errorText;
+                    } catch (e) {
+                        result.errorBody = 'Could not read error response';
+                    }
+                    result.success = false;
+                }
+                
+                results.push(result);
+                
+            } catch (fetchError) {
+                console.log(`URL ${i + 1} failed:`, fetchError.message);
+                results.push({
+                    url: url,
+                    success: false,
+                    error: fetchError.message
+                });
+            }
+        }
+        
+        // If we get here, none of the URLs worked
+        res.status(500).json({
+            success: false,
+            message: 'All ReccoBeats URL attempts failed',
+            trackId: trackId,
+            results: results,
+            suggestion: 'ReccoBeats API might require registration, authentication, or use different endpoint format'
+        });
+        
+    } catch (error) {
+        console.error('Test endpoint error:', error);
+        res.status(500).json({
+            success: false,
+            error: error.message,
+            trackId: trackId
+        });
+    }
+});
+
+
 // Authenticate with Spotify (for search)
 app.post('/api/auth', async (req, res) => {
     try {
