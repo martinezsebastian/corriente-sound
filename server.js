@@ -475,3 +475,205 @@ app.listen(PORT, () => {
         .then(() => console.log('✅ Spotify API connection successful'))
         .catch(err => console.error('❌ Spotify API connection failed:', err.message));
 });
+
+// Get similar song recommendation - test ReccoBeats recommendations
+app.get('/api/similar-song/:trackId', async (req, res) => {
+    try {
+        const { trackId } = req.params;
+        console.log(`🔍 Finding similar song for track: ${trackId}`);
+        
+        // Step 1: Get the original track info from Spotify
+        const token = await getSpotifyToken();
+        const trackResponse = await fetch(`https://api.spotify.com/v1/tracks/${trackId}`, {
+            headers: { 'Authorization': `Bearer ${token}` }
+        });
+        
+        if (!trackResponse.ok) {
+            throw new Error(`Failed to get track info: ${trackResponse.status}`);
+        }
+        
+        const originalTrack = await trackResponse.json();
+        console.log('Original track:', originalTrack.name, 'by', originalTrack.artists[0].name);
+        
+        // Step 2: Get audio features for the original track
+        const audioFeatures = await getIntelligentFeatures(originalTrack);
+        console.log('Audio features:', audioFeatures);
+        
+        // Step 3: Try to get ReccoBeats recommendations
+        let reccobeatsRecommendation = null;
+        try {
+            console.log('🎵 Attempting ReccoBeats recommendation...');
+            
+            // Try different ReccoBeats recommendation endpoints
+            const reccobeatsEndpoints = [
+                `${RECCOBEATS_API_BASE}/v1/track/recommendation`,
+                `${RECCOBEATS_API_BASE}/v1/recommendations`,
+                `${RECCOBEATS_API_BASE}/recommendation`
+            ];
+            
+            for (const endpoint of reccobeatsEndpoints) {
+                try {
+                    // Try with query parameters
+                    const queryParams = new URLSearchParams({
+                        energy: audioFeatures.energy,
+                        danceability: audioFeatures.danceability,
+                        valence: audioFeatures.valence,
+                        tempo: audioFeatures.tempo,
+                        limit: 1
+                    });
+                    
+                    const testUrl = `${endpoint}?${queryParams}`;
+                    console.log('Testing ReccoBeats URL:', testUrl);
+                    
+                    const reccoResponse = await fetch(testUrl);
+                    
+                    if (reccoResponse.ok) {
+                        const reccoData = await reccoResponse.json();
+                        console.log('✅ ReccoBeats response:', reccoData);
+                        
+                        if (reccoData && Array.isArray(reccoData) && reccoData.length > 0) {
+                            reccobeatsRecommendation = reccoData[0];
+                            console.log('Got ReccoBeats recommendation:', reccobeatsRecommendation);
+                            break;
+                        }
+                    } else {
+                        console.log(`ReccoBeats endpoint ${endpoint} returned:`, reccoResponse.status);
+                    }
+                    
+                } catch (endpointError) {
+                    console.log(`ReccoBeats endpoint ${endpoint} failed:`, endpointError.message);
+                }
+            }
+            
+        } catch (reccoError) {
+            console.log('❌ ReccoBeats recommendation failed:', reccoError.message);
+        }
+        
+        // Step 4: If ReccoBeats worked, try to find the song on Spotify
+        let spotifySimilarTrack = null;
+        
+        if (reccobeatsRecommendation) {
+            try {
+                console.log('🔍 Searching Spotify for ReccoBeats recommendation...');
+                
+                // Extract searchable info from ReccoBeats response
+                const searchQuery = reccobeatsRecommendation.track_name || reccobeatsRecommendation.name || reccobeatsRecommendation.title;
+                const artistName = reccobeatsRecommendation.artist_name || reccobeatsRecommendation.artist;
+                
+                if (searchQuery) {
+                    const searchTerm = artistName ? `${searchQuery} ${artistName}` : searchQuery;
+                    const searchUrl = `https://api.spotify.com/v1/search?q=${encodeURIComponent(searchTerm)}&type=track&limit=1`;
+                    
+                    const searchResponse = await fetch(searchUrl, {
+                        headers: { 'Authorization': `Bearer ${token}` }
+                    });
+                    
+                    if (searchResponse.ok) {
+                        const searchData = await searchResponse.json();
+                        if (searchData.tracks.items.length > 0) {
+                            spotifySimilarTrack = searchData.tracks.items[0];
+                            console.log('✅ Found similar track on Spotify:', spotifySimilarTrack.name);
+                        }
+                    }
+                }
+                
+            } catch (spotifySearchError) {
+                console.log('❌ Spotify search for similar track failed:', spotifySearchError.message);
+            }
+        }
+        
+        // Step 5: Fallback - use Spotify search with audio feature keywords
+        if (!spotifySimilarTrack) {
+            console.log('🎯 Using fallback: Spotify search with feature-based keywords...');
+            
+            try {
+                // Create search terms based on audio features
+                let searchTerms = [];
+                
+                if (audioFeatures.energy > 0.7) searchTerms.push('energetic');
+                if (audioFeatures.danceability > 0.7) searchTerms.push('dance');
+                if (audioFeatures.valence > 0.7) searchTerms.push('happy');
+                if (audioFeatures.valence < 0.3) searchTerms.push('sad');
+                if (audioFeatures.acousticness > 0.5) searchTerms.push('acoustic');
+                
+                // Add genre-based terms
+                const originalArtist = originalTrack.artists[0].name.toLowerCase();
+                
+                // Add search terms and original artist genre context
+                if (searchTerms.length === 0) {
+                    searchTerms = ['similar', 'like'];
+                }
+                
+                const searchQuery = searchTerms.join(' OR ') + ` genre:${originalArtist.includes('electronic') ? 'electronic' : 'pop'}`;
+                const fallbackUrl = `https://api.spotify.com/v1/search?q=${encodeURIComponent(searchQuery)}&type=track&limit=5`;
+                
+                const fallbackResponse = await fetch(fallbackUrl, {
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+                
+                if (fallbackResponse.ok) {
+                    const fallbackData = await fallbackResponse.json();
+                    // Find a track that's not the same as the original
+                    const differentTrack = fallbackData.tracks.items.find(track => track.id !== trackId);
+                    if (differentTrack) {
+                        spotifySimilarTrack = differentTrack;
+                        console.log('✅ Found fallback similar track:', spotifySimilarTrack.name);
+                    }
+                }
+                
+            } catch (fallbackError) {
+                console.log('❌ Fallback search failed:', fallbackError.message);
+            }
+        }
+        
+        // Step 6: Return results
+        const response = {
+            originalTrack: {
+                id: originalTrack.id,
+                name: originalTrack.name,
+                artist: originalTrack.artists[0].name,
+                album: originalTrack.album.name
+            },
+            audioFeatures: audioFeatures,
+            reccobeatsRecommendation: reccobeatsRecommendation,
+            similarTrack: spotifySimilarTrack,
+            pipeline: {
+                reccobeatsUsed: !!reccobeatsRecommendation,
+                spotifySearchUsed: !!spotifySimilarTrack,
+                method: reccobeatsRecommendation ? 'reccobeats_to_spotify' : 'feature_based_search'
+            }
+        };
+        
+        res.json(response);
+        
+    } catch (error) {
+        console.error('Similar song error:', error);
+        res.status(500).json({ 
+            error: 'Failed to find similar song',
+            details: error.message,
+            trackId: req.params.trackId
+        });
+    }
+});
+
+// Helper function to get intelligent features (extract from existing code)
+async function getIntelligentFeatures(trackData) {
+    // This is the same logic from your generateIntelligentFeatures function
+    // But returns just the features object for use in recommendations
+    const features = generateIntelligentFeatures(trackData);
+    
+    // Remove metadata for cleaner API calls
+    const cleanFeatures = {
+        acousticness: features.acousticness,
+        danceability: features.danceability,
+        energy: features.energy,
+        instrumentalness: features.instrumentalness,
+        liveness: features.liveness,
+        loudness: features.loudness,
+        speechiness: features.speechiness,
+        tempo: features.tempo,
+        valence: features.valence
+    };
+    
+    return cleanFeatures;
+}
