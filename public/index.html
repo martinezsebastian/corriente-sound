@@ -186,6 +186,63 @@
             cursor: not-allowed;
         }
 
+
+        .similar-songs-list {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+        }
+        
+        .similar-song-item {
+            display: flex;
+            align-items: center;
+            padding: 12px;
+            background: #374151;
+            border-radius: 8px;
+            transition: all 0.3s;
+            cursor: pointer;
+            border: 2px solid transparent;
+        }
+        
+        .similar-song-item:hover {
+            background: #4b5563;
+            border-color: #ec4899;
+            transform: translateX(5px);
+        }
+        
+        .similar-rank {
+            width: 25px;
+            height: 25px;
+            background: linear-gradient(45deg, #ec4899, #a855f7);
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-weight: bold;
+            font-size: 0.8rem;
+            margin-right: 12px;
+            flex-shrink: 0;
+        }
+        
+        .similarity-score {
+            color: #ec4899;
+            font-size: 0.75rem;
+            font-weight: 600;
+            margin-left: auto;
+            display: flex;
+            align-items: center;
+            gap: 4px;
+        }
+        
+        .strategy-tag {
+            background: rgba(236, 72, 153, 0.2);
+            color: #ec4899;
+            padding: 2px 6px;
+            border-radius: 4px;
+            font-size: 0.6rem;
+            margin-top: 2px;
+        }
         /* New audio features debug section */
         .audio-features-debug {
             display: none;
@@ -594,11 +651,11 @@
             <!-- Similar Song Test Section -->
             <div class="similar-song-section" id="similarSongSection">
                 <div class="similar-song-header">
-                    🎵 Similar Song Test
+                    🎵 Similar Songs
                     <button class="test-btn" onclick="findSimilarSong()">Find Similar</button>
                 </div>
-                <div id="similarSongResult">
-                    <!-- Similar song will be displayed here -->
+                <div id="similarSongResult" class="similar-songs-list">
+                    <!-- Similar songs will be displayed here -->
                 </div>
                 <div class="pipeline-info" id="pipelineInfo">
                     <!-- Pipeline information will be shown here -->
@@ -948,39 +1005,53 @@
             }
         }
         
-        // Display similar song results
+        // Display top 5 similar song results
         function displaySimilarSong(data) {
             const resultDiv = document.getElementById('similarSongResult');
             const pipelineDiv = document.getElementById('pipelineInfo');
             
-            if (data.similarTrack) {
-                const track = data.similarTrack;
-                const artwork = track.album?.images?.length > 0 ? 
-                    `<img src="${track.album.images[2]?.url || track.album.images[0]?.url}" class="track-artwork" />` :
-                    `<div class="track-artwork-placeholder">🎵</div>`;
+            if (data.similarTracks && data.similarTracks.length > 0) {
+                // Clear previous results
+                resultDiv.innerHTML = '';
                 
-                resultDiv.innerHTML = `
-                    <div class="similar-song-item" onclick="openInSpotify('${track.external_urls?.spotify || '#'}')">
+                // Display each similar track
+                data.similarTracks.forEach((track, index) => {
+                    const artwork = track.album?.images?.length > 0 ? 
+                        `<img src="${track.album.images[2]?.url || track.album.images[0]?.url}" class="track-artwork" />` :
+                        `<div class="track-artwork-placeholder">🎵</div>`;
+                    
+                    const similarityPercent = Math.round(track._similarity * 100);
+                    const strategy = track._strategy || 'unknown';
+                    
+                    const trackDiv = document.createElement('div');
+                    trackDiv.className = 'similar-song-item';
+                    trackDiv.onclick = () => openInSpotify(track.external_urls?.spotify || '#');
+                    
+                    trackDiv.innerHTML = `
+                        <div class="similar-rank">${index + 1}</div>
                         ${artwork}
                         <div class="track-info">
                             <div class="track-title">${track.name}</div>
                             <div class="track-artist">${track.artists[0].name}</div>
+                            <div class="strategy-tag">${strategy}</div>
                         </div>
-                        <span style="color: #ec4899; font-size: 0.8rem; margin-left: auto;">✨ Similar</span>
-                    </div>
-                `;
+                        <div class="similarity-score">
+                            ✨ ${similarityPercent}%
+                        </div>
+                    `;
+                    
+                    resultDiv.appendChild(trackDiv);
+                });
                 
                 // Show pipeline info
-                let pipelineText = `Pipeline: ${data.pipeline.method}`;
-                if (data.pipeline.reccobeatsUsed) {
-                    pipelineText += ' ✅ ReccoBeats → Spotify';
-                } else {
-                    pipelineText += ' 🎯 Feature-based Spotify search';
+                let pipelineText = `Found ${data.pipeline.topMatches} similar tracks using ${data.pipeline.method}`;
+                if (data.pipeline.tracksFound > data.pipeline.topMatches) {
+                    pipelineText += ` (${data.pipeline.tracksFound} total candidates)`;
                 }
                 pipelineDiv.textContent = pipelineText;
                 
             } else {
-                resultDiv.innerHTML = '<p style="color: #9ca3af;">No similar song found</p>';
+                resultDiv.innerHTML = '<p style="color: #9ca3af;">No similar songs found</p>';
                 pipelineDiv.textContent = 'Pipeline test completed - check server logs for details';
             }
         }
