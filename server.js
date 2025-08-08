@@ -336,7 +336,7 @@ async function findSimilarTracksViaSpotify(originalTrack, audioFeatures, token) 
     console.log(`Found ${sortedCandidates.length} unique similar tracks`);
     
     // Return top 3 matches
-    return sortedCandidates.slice(0, 3);
+    return sortedCandidates.slice(0, 10);
 }
 
 // API Routes
