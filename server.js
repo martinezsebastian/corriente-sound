@@ -507,8 +507,8 @@ app.get('/api/similar-song/:trackId', async (req, res) => {
         // Step 3: Find similar tracks using smart search
         const similarTracks = await findSimilarTracksViaSpotify(originalTrack, audioFeatures, token);
         
-        // Step 4: Return the best match
-        const bestMatch = similarTracks.length > 0 ? similarTracks[0] : null;
+        // Step 4: Return top 5 matches instead of just 1
+        const topMatches = similarTracks.length > 0 ? similarTracks.slice(0, 5) : [];
         
         const response = {
             originalTrack: {
@@ -518,15 +518,16 @@ app.get('/api/similar-song/:trackId', async (req, res) => {
                 album: originalTrack.album.name
             },
             audioFeatures: audioFeatures,
-            similarTrack: bestMatch,
-            allSimilarTracks: similarTracks, // For debugging
+            similarTracks: topMatches,  // Changed from 'similarTrack' to 'similarTracks' (plural)
+            allSimilarTracks: similarTracks, // Keep all for debugging
             pipeline: {
                 method: 'smart_spotify_search',
                 tracksFound: similarTracks.length,
-                success: !!bestMatch
+                topMatches: topMatches.length,
+                success: topMatches.length > 0
             }
         };
-        
+                
         res.json(response);
         
     } catch (error) {
