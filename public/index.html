@@ -531,7 +531,7 @@
     <div class="container">
         <div class="header">
             <h1 class="logo">Corriente Sound</h1>
-            <p class="subtitle">Start with a song, steer the current</p>
+            <p class="subtitle">Play your Current</p>
         </div>
 
         <!-- Authentication Section -->
@@ -588,6 +588,20 @@
                     <div class="feature-grid" id="featureGrid">
                         <!-- Features will be populated here -->
                     </div>
+                </div>
+            </div>
+
+            <!-- Similar Song Test Section -->
+            <div class="similar-song-section" id="similarSongSection">
+                <div class="similar-song-header">
+                    🎵 Similar Song Test
+                    <button class="test-btn" onclick="findSimilarSong()">Find Similar</button>
+                </div>
+                <div id="similarSongResult">
+                    <!-- Similar song will be displayed here -->
+                </div>
+                <div class="pipeline-info" id="pipelineInfo">
+                    <!-- Pipeline information will be shown here -->
                 </div>
             </div>
         </div>
@@ -900,6 +914,76 @@
                 return [];
             }
         }
+        // Test similar song functionality
+        async function findSimilarSong() {
+            if (!currentSong) {
+                showError('No song selected');
+                return;
+            }
+            
+            console.log('🔍 Finding similar song for:', currentSong.name);
+            showLoading(true);
+            
+            try {
+                const response = await fetch(`${API_BASE}/similar-song/${currentSong.id}`);
+                
+                if (!response.ok) {
+                    throw new Error('Failed to find similar song');
+                }
+                
+                const data = await response.json();
+                console.log('Similar song response:', data);
+                
+                // Display results
+                displaySimilarSong(data);
+                
+                // Show the section
+                document.getElementById('similarSongSection').classList.add('show');
+                
+            } catch (error) {
+                console.error('Similar song error:', error);
+                showError('Failed to find similar song: ' + error.message);
+            } finally {
+                showLoading(false);
+            }
+        }
+        
+        // Display similar song results
+        function displaySimilarSong(data) {
+            const resultDiv = document.getElementById('similarSongResult');
+            const pipelineDiv = document.getElementById('pipelineInfo');
+            
+            if (data.similarTrack) {
+                const track = data.similarTrack;
+                const artwork = track.album?.images?.length > 0 ? 
+                    `<img src="${track.album.images[2]?.url || track.album.images[0]?.url}" class="track-artwork" />` :
+                    `<div class="track-artwork-placeholder">🎵</div>`;
+                
+                resultDiv.innerHTML = `
+                    <div class="similar-song-item" onclick="openInSpotify('${track.external_urls?.spotify || '#'}')">
+                        ${artwork}
+                        <div class="track-info">
+                            <div class="track-title">${track.name}</div>
+                            <div class="track-artist">${track.artists[0].name}</div>
+                        </div>
+                        <span style="color: #ec4899; font-size: 0.8rem; margin-left: auto;">✨ Similar</span>
+                    </div>
+                `;
+                
+                // Show pipeline info
+                let pipelineText = `Pipeline: ${data.pipeline.method}`;
+                if (data.pipeline.reccobeatsUsed) {
+                    pipelineText += ' ✅ ReccoBeats → Spotify';
+                } else {
+                    pipelineText += ' 🎯 Feature-based Spotify search';
+                }
+                pipelineDiv.textContent = pipelineText;
+                
+            } else {
+                resultDiv.innerHTML = '<p style="color: #9ca3af;">No similar song found</p>';
+                pipelineDiv.textContent = 'Pipeline test completed - check server logs for details';
+            }
+        }
 
         // Initialize search functionality
         document.addEventListener('DOMContentLoaded', function() {
@@ -1009,6 +1093,9 @@
             
             // Hide search results
             document.getElementById('searchResults').classList.remove('show');
+
+            // In your selectSong function, add this line after showing the debug section:
+            document.getElementById('similarSongSection').classList.add('show');
             
             // Get audio features immediately and show debug info
             console.log('🎯 Fetching audio features for selected song...');
