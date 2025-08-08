@@ -201,6 +201,69 @@
             display: block;
         }
 
+        /* Similar song suggestion section */
+        .similar-song-section {
+            display: none;
+            background: rgba(15, 23, 42, 0.8);
+            border: 1px solid rgba(236, 72, 153, 0.3);
+            border-radius: 12px;
+            padding: 20px;
+            margin-top: 20px;
+        }
+        
+        .similar-song-section.show {
+            display: block;
+        }
+        
+        .similar-song-header {
+            color: #ec4899;
+            font-weight: bold;
+            margin-bottom: 15px;
+            font-size: 1rem;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        
+        .similar-song-item {
+            display: flex;
+            align-items: center;
+            padding: 15px;
+            background: #374151;
+            border-radius: 10px;
+            margin-bottom: 10px;
+            transition: background-color 0.3s;
+            cursor: pointer;
+        }
+        
+        .similar-song-item:hover {
+            background: #4b5563;
+        }
+        
+        .pipeline-info {
+            font-size: 0.8rem;
+            color: #9ca3af;
+            margin-top: 10px;
+            font-style: italic;
+        }
+        
+        .test-btn {
+            padding: 8px 16px;
+            background: linear-gradient(45deg, #ec4899, #a855f7);
+            border: none;
+            border-radius: 6px;
+            color: white;
+            font-size: 0.9rem;
+            cursor: pointer;
+            transition: transform 0.2s;
+        }
+        
+        .test-btn:hover {
+            transform: scale(1.05);
+        }
+        
+                
+
         .debug-header {
             color: #03fca5;
             font-weight: bold;
