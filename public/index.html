@@ -276,14 +276,20 @@
             text-align: center; font-size: 0.95rem; font-weight: 500;
         }
         .mood-btn:hover { border-color: var(--accent); transform: translateY(-2px); background: rgba(255, 245, 230, 0.85); }
-        .mood-btn.selected {
-            background: var(--accent);
-            border-color: var(--accent);
-            color: white;
-            box-shadow: 0 8px 18px rgba(26, 107, 80, 0.28);
-        }
+        .mood-btn.selected { color: white; }
 
-        .mood-icon { font-size: 2rem; margin-bottom: 8px; display: block; }
+        .mood-btn.mood-upbeat.selected   { background: #B8822A; border-color: #B8822A; box-shadow: 0 8px 18px rgba(184,130,42,0.30); }
+        .mood-btn.mood-chill.selected    { background: #4A7A68; border-color: #4A7A68; box-shadow: 0 8px 18px rgba(74,122,104,0.30); }
+        .mood-btn.mood-groovy.selected   { background: #9A4A2A; border-color: #9A4A2A; box-shadow: 0 8px 18px rgba(154,74,42,0.30); }
+        .mood-btn.mood-romantic.selected { background: #9A3A5C; border-color: #9A3A5C; box-shadow: 0 8px 18px rgba(154,58,92,0.30); }
+
+        .mood-icon {
+            font-size: 1.6rem;
+            margin-bottom: 10px;
+            display: block;
+            font-style: normal;
+            line-height: 1;
+        }
 
         /* ── generate button ── */
         .generate-btn {
@@ -427,21 +433,21 @@
             <p class="mood-subtitle">Select the mood directions you want to explore</p>
             
             <div class="mood-buttons">
-                <button class="mood-btn" onclick="toggleMood(this, 'upbeat')">
-                    <span class="mood-icon">⚡</span>
-                    More Upbeat
+                <button class="mood-btn mood-upbeat" onclick="toggleMood(this, 'upbeat')">
+                    <span class="mood-icon">↑</span>
+                    Upbeat
                 </button>
-                <button class="mood-btn" onclick="toggleMood(this, 'chill')">
-                    <span class="mood-icon">🌊</span>
-                    More Chill
+                <button class="mood-btn mood-chill" onclick="toggleMood(this, 'chill')">
+                    <span class="mood-icon">≈</span>
+                    Chill
                 </button>
-                <button class="mood-btn" onclick="toggleMood(this, 'groovy')">
-                    <span class="mood-icon">🕺</span>
-                    More Groovy
+                <button class="mood-btn mood-groovy" onclick="toggleMood(this, 'groovy')">
+                    <span class="mood-icon">♩</span>
+                    Groovy
                 </button>
-                <button class="mood-btn" onclick="toggleMood(this, 'romantic')">
-                    <span class="mood-icon">💕</span>
-                    More Romantic
+                <button class="mood-btn mood-romantic" onclick="toggleMood(this, 'romantic')">
+                    <span class="mood-icon">♡</span>
+                    Romantic
                 </button>
             </div>
 
