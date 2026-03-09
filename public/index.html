@@ -411,27 +411,6 @@
                     </button>
                 </div>
 
-                <!-- Audio Features Debug Section -->
-                <div class="audio-features-debug" id="audioFeaturesDebug">
-                    <div class="debug-header">🎯 ReccoBeats Audio Features Analysis</div>
-                    <div class="feature-grid" id="featureGrid">
-                        <!-- Features will be populated here -->
-                    </div>
-                </div>
-            </div>
-
-            <!-- Similar Song Test Section -->
-            <div class="similar-song-section" id="similarSongSection">
-                <div class="similar-song-header">
-                    🎵 Similar Songs
-                    <button class="test-btn" onclick="findSimilarSong()">Find Similar</button>
-                </div>
-                <div id="similarSongResult" class="similar-songs-list">
-                    <!-- Similar songs will be displayed here -->
-                </div>
-                <div class="pipeline-info" id="pipelineInfo">
-                    <!-- Pipeline information will be shown here -->
-                </div>
             </div>
         </div>
 
@@ -486,7 +465,6 @@
         let isAuthenticated = false;
         let selectedMoods = [];
         let currentSong = null;
-        let currentAudioFeatures = null; // Store current song's features
         let searchTimeout = null;
         let currentAudio = null;
 
@@ -560,245 +538,29 @@
             }
         }
 
-        // Enhanced audio features fetching with better error handling and debug display
-        async function getAudioFeatures(trackId) {
-            try {
-                console.log(`🎯 Getting audio features for track: ${trackId}`);
-                
-                const response = await fetch(`${API_BASE}/audio-features/${trackId}`);
-
-                if (!response.ok) {
-                    const errorData = await response.json().catch(() => ({}));
-                    throw new Error(errorData.error || `HTTP ${response.status}: Failed to get audio features`);
-                }
-
-                const features = await response.json();
-                
-                // Validate that we got the expected audio features
-                const requiredFeatures = ['energy', 'danceability', 'valence', 'tempo'];
-                const missingFeatures = requiredFeatures.filter(feature => 
-                    features[feature] === undefined || features[feature] === null
-                );
-                
-                if (missingFeatures.length > 0) {
-                    console.warn('Missing audio features:', missingFeatures);
-                    showError('This song has incomplete analysis data. Try a different track.');
-                    return null;
-                }
-                
-                console.log('✅ Audio features received:', features);
-                
-                // Store features and update debug display
-                currentAudioFeatures = features;
-                updateAudioFeaturesDebug(features);
-                
-                return features;
-                
-            } catch (error) {
-                console.error('Audio features error:', error);
-                showError('Failed to analyze song characteristics: ' + error.message);
-                return null;
-            }
-        }
-
-        // Display audio features in debug section
-        function updateAudioFeaturesDebug(features) {
-            const debugSection = document.getElementById('audioFeaturesDebug');
-            const featureGrid = document.getElementById('featureGrid');
-            
-            // Clear previous content
-            featureGrid.innerHTML = '';
-            
-            // Define feature display names and formatting
-            const featureDefinitions = {
-                'acousticness': { name: 'Acoustic', format: (v) => (v * 100).toFixed(1) + '%' },
-                'danceability': { name: 'Danceable', format: (v) => (v * 100).toFixed(1) + '%' },
-                'energy': { name: 'Energy', format: (v) => (v * 100).toFixed(1) + '%' },
-                'instrumentalness': { name: 'Instrumental', format: (v) => (v * 100).toFixed(1) + '%' },
-                'liveness': { name: 'Live', format: (v) => (v * 100).toFixed(1) + '%' },
-                'loudness': { name: 'Loudness', format: (v) => v.toFixed(1) + 'dB' },
-                'speechiness': { name: 'Speech', format: (v) => (v * 100).toFixed(1) + '%' },
-                'tempo': { name: 'Tempo', format: (v) => Math.round(v) + ' BPM' },
-                'valence': { name: 'Positivity', format: (v) => (v * 100).toFixed(1) + '%' }
-            };
-            
-            // Create feature items
-            Object.entries(features).forEach(([key, value]) => {
-                if (featureDefinitions[key] && value !== undefined && value !== null) {
-                    const featureItem = document.createElement('div');
-                    featureItem.className = 'feature-item';
-                    
-                    const definition = featureDefinitions[key];
-                    featureItem.innerHTML = `
-                        <span class="feature-name">${definition.name}</span>
-                        <span class="feature-value">${definition.format(value)}</span>
-                    `;
-                    
-                    featureGrid.appendChild(featureItem);
-                }
-            });
-            
-            // Show debug section
-            debugSection.classList.add('show');
-        }
-
-        // Enhanced recommendation generation with ReccoBeats
         async function getRecommendations(seedTrackId, moods) {
             try {
-                console.log(`🎵 Getting recommendations for ${seedTrackId} with moods: ${moods.join(', ')}`);
-                
-                // Use stored features if available, otherwise fetch them
-                let features = currentAudioFeatures;
-                if (!features) {
-                    features = await getAudioFeatures(seedTrackId);
-                    if (!features) {
-                        throw new Error('Could not analyze seed track');
-                    }
-                }
-
-                // Calculate target features based on selected moods (same logic as before)
-                let targetFeatures = {
+                const queryParams = new URLSearchParams({
                     seed_tracks: seedTrackId,
+                    moods: moods.join(','),
                     limit: 9,
-                    target_energy: features.energy,
-                    target_danceability: features.danceability,
-                    target_valence: features.valence,
-                    target_tempo: features.tempo
-                };
-
-                // Adjust features based on selected moods
-                moods.forEach(mood => {
-                    switch(mood) {
-                        case 'upbeat':
-                            targetFeatures.target_energy = Math.min(1.0, features.energy + 0.3);
-                            targetFeatures.target_tempo = Math.min(200, features.tempo + 40);
-                            break;
-                        case 'chill':
-                            targetFeatures.target_energy = Math.max(0.1, features.energy - 0.3);
-                            targetFeatures.target_tempo = Math.max(60, features.tempo - 40);
-                            break;
-                        case 'groovy':
-                            targetFeatures.target_danceability = Math.min(1.0, features.danceability + 0.3);
-                            break;
-                        case 'romantic':
-                            targetFeatures.target_valence = Math.min(1.0, features.valence + 0.2);
-                            targetFeatures.target_energy = Math.max(0.2, features.energy - 0.2);
-                            break;
-                    }
                 });
-
-                // Log target features for debugging
-                console.log('Target features:', targetFeatures);
-
-                // Build query string for backend
-                const queryParams = new URLSearchParams(targetFeatures);
-                
                 const response = await fetch(`${API_BASE}/recommendations?${queryParams}`);
-
                 if (!response.ok) {
                     const errorData = await response.json().catch(() => ({}));
                     throw new Error(errorData.error || 'Failed to get recommendations');
                 }
-
                 const tracks = await response.json();
-                
-                // Validate that we got actual tracks back
                 if (!Array.isArray(tracks) || tracks.length === 0) {
                     console.warn('No recommendations returned');
                     return [];
                 }
-                
                 console.log(`✅ Got ${tracks.length} recommendations`);
                 return tracks;
-                
             } catch (error) {
                 console.error('Recommendations error:', error);
                 showError('Failed to generate playlist: ' + error.message);
                 return [];
-            }
-        }
-        // Test similar song functionality
-        async function findSimilarSong() {
-            if (!currentSong) {
-                showError('No song selected');
-                return;
-            }
-            
-            console.log('🔍 Finding similar song for:', currentSong.name);
-            showLoading(true);
-            
-            try {
-                const response = await fetch(`${API_BASE}/similar-song/${currentSong.id}`);
-                
-                if (!response.ok) {
-                    throw new Error('Failed to find similar song');
-                }
-                
-                const data = await response.json();
-                console.log('Similar song response:', data);
-                
-                // Display results
-                displaySimilarSong(data);
-                
-                // Show the section
-                document.getElementById('similarSongSection').classList.add('show');
-                
-            } catch (error) {
-                console.error('Similar song error:', error);
-                showError('Failed to find similar song: ' + error.message);
-            } finally {
-                showLoading(false);
-            }
-        }
-        
-        // Display top 5 similar song results
-        function displaySimilarSong(data) {
-            const resultDiv = document.getElementById('similarSongResult');
-            const pipelineDiv = document.getElementById('pipelineInfo');
-            
-            if (data.similarTracks && data.similarTracks.length > 0) {
-                // Clear previous results
-                resultDiv.innerHTML = '';
-                
-                // Display each similar track
-                data.similarTracks.forEach((track, index) => {
-                    const artwork = track.album?.images?.length > 0 ? 
-                        `<img src="${track.album.images[2]?.url || track.album.images[0]?.url}" class="track-artwork" />` :
-                        `<div class="track-artwork-placeholder">🎵</div>`;
-                    
-                    const similarityPercent = Math.round(track._similarity * 100);
-                    const strategy = track._strategy || 'unknown';
-                    
-                    const trackDiv = document.createElement('div');
-                    trackDiv.className = 'similar-song-item';
-                    trackDiv.onclick = () => openInSpotify(track.external_urls?.spotify || '#');
-                    
-                    trackDiv.innerHTML = `
-                        <div class="similar-rank">${index + 1}</div>
-                        ${artwork}
-                        <div class="track-info">
-                            <div class="track-title">${track.name}</div>
-                            <div class="track-artist">${track.artists[0].name}</div>
-                            <div class="strategy-tag">${strategy}</div>
-                        </div>
-                        <div class="similarity-score">
-                            ✨ ${similarityPercent}%
-                        </div>
-                    `;
-                    
-                    resultDiv.appendChild(trackDiv);
-                });
-                
-                // Show pipeline info
-                let pipelineText = `Found ${data.pipeline.topMatches} similar tracks using ${data.pipeline.method}`;
-                if (data.pipeline.tracksFound > data.pipeline.topMatches) {
-                    pipelineText += ` (${data.pipeline.tracksFound} total candidates)`;
-                }
-                pipelineDiv.textContent = pipelineText;
-                
-            } else {
-                resultDiv.innerHTML = '<p style="color: var(--ink-light);">No similar songs found</p>';
-                pipelineDiv.textContent = 'Pipeline test completed - check server logs for details';
             }
         }
 
@@ -867,74 +629,41 @@
             showLoading(false);
         }
 
-        async function selectSong(track) {
+        function selectSong(track) {
             currentSong = track;
-            currentAudioFeatures = null; // Reset features
-            
+
             // Stop any currently playing audio
             if (currentAudio) {
                 currentAudio.pause();
                 currentAudio = null;
                 updatePlayButton(false);
             }
-            
+
             // Update selected song display
             document.getElementById('selectedTitle').textContent = track.name;
             document.getElementById('selectedArtist').textContent = track.artists[0].name;
             document.getElementById('selectedAlbum').textContent = track.album.name;
-            
+
             // Update artwork
             const artworkImg = document.getElementById('selectedArtwork');
             const artworkPlaceholder = document.getElementById('artworkPlaceholder');
-            
             if (track.album.images.length > 0) {
                 artworkImg.src = track.album.images[1]?.url || track.album.images[0]?.url;
                 artworkImg.style.display = 'block';
                 artworkPlaceholder.style.display = 'none';
             }
-            
-            // Enable/disable play button based on preview availability
+
+            // Enable/disable play button
             const playBtn = document.getElementById('playBtn');
-            if (track.preview_url) {
-                playBtn.disabled = false;
-                playBtn.style.opacity = '1';
-                playBtn.title = 'Play 30-second preview';
-            } else {
-                playBtn.disabled = true;
-                playBtn.style.opacity = '0.5';
-                playBtn.title = 'No preview available for this song';
-            }
-            
-            // Show selected song
+            playBtn.disabled = !track.preview_url;
+            playBtn.style.opacity = track.preview_url ? '1' : '0.5';
+
             document.getElementById('selectedSong').classList.add('show');
-            
-            // Hide search results
             document.getElementById('searchResults').classList.remove('show');
 
-            // In your selectSong function, add this line after showing the debug section:
-            document.getElementById('similarSongSection').classList.add('show');
-            
-            // Get audio features immediately and show debug info
-            console.log('🎯 Fetching audio features for selected song...');
-            showLoading(true);
-            
-            try {
-                const features = await getAudioFeatures(track.id);
-                if (features) {
-                    // Show mood section after successful feature extraction
-                    document.getElementById('moodSection').classList.add('show');
-                    
-                    // Scroll to mood section
-                    document.getElementById('moodSection').scrollIntoView({ behavior: 'smooth' });
-                } else {
-                    showError('Could not analyze this song. Please try a different track.');
-                }
-            } catch (error) {
-                console.error('Error getting audio features:', error);
-                showError('Failed to analyze song: ' + error.message);
-            } finally {
-                showLoading(false);
-            }
+            // Show mood section immediately — no API call needed here
+            document.getElementById('moodSection').classList.add('show');
+            document.getElementById('moodSection').scrollIntoView({ behavior: 'smooth' });
         }
 
         function toggleMood(button, moodType) {
