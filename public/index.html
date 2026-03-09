@@ -359,6 +359,37 @@
         }
         .error.show { display: block; }
 
+        /* ── save button ── */
+        .save-btn {
+            display: none;
+            margin-top: 24px;
+            width: 100%;
+            padding: 14px;
+            background: #1db954;
+            border: none;
+            border-radius: 12px;
+            color: white;
+            font-family: 'DM Mono', monospace;
+            font-size: 0.95rem;
+            font-weight: 500;
+            letter-spacing: 0.06em;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+        .save-btn.show { display: block; }
+        .save-btn:hover { background: #1aa34a; transform: translateY(-1px); }
+        .save-btn:disabled { opacity: 0.6; cursor: not-allowed; transform: none; }
+        .save-btn.saved { background: var(--accent); }
+
+        .save-status {
+            text-align: center;
+            margin-top: 12px;
+            font-size: 0.88rem;
+            color: var(--ink-mid);
+            min-height: 1.2em;
+        }
+        .save-status a { color: var(--accent); }
+
         /* ── service status (hidden by default, kept for compat) ── */
         .service-status {
             position: fixed; bottom: 20px; right: 20px;
@@ -463,9 +494,12 @@
                 <p class="playlist-meta" id="playlistMeta">Generating...</p>
             </div>
 
-            <div class="playlist-tracks" id="playlistTracks">
-                <!-- Real Spotify tracks will be populated here -->
-            </div>
+            <div class="playlist-tracks" id="playlistTracks"></div>
+
+            <button class="save-btn" id="saveBtn" onclick="saveToSpotify()">
+                Save to Spotify
+            </button>
+            <p class="save-status" id="saveStatus"></p>
         </div>
     </div>
 
@@ -676,6 +710,13 @@
             document.getElementById('moodSection').scrollIntoView({ behavior: 'smooth' });
         }
 
+        const MOOD_COLORS = {
+            upbeat:   '#B8822A',
+            chill:    '#4A7A68',
+            groovy:   '#9A4A2A',
+            romantic: '#9A3A5C',
+        };
+
         function toggleMood(button, moodType) {
             if (button.classList.contains('selected')) {
                 button.classList.remove('selected');
@@ -685,12 +726,17 @@
                 selectedMoods.push(moodType);
             }
 
-            // Show generate button if any mood is selected
+            // Show/update generate button
             const generateBtn = document.getElementById('generateBtn');
             if (selectedMoods.length > 0) {
                 generateBtn.classList.add('show');
+                const colors = selectedMoods.map(m => MOOD_COLORS[m]);
+                generateBtn.style.background = colors.length === 1
+                    ? colors[0]
+                    : `linear-gradient(90deg, ${colors.join(', ')})`;
             } else {
                 generateBtn.classList.remove('show');
+                generateBtn.style.background = '';
             }
         }
 
@@ -733,9 +779,11 @@
         }
 
         function displayPlaylist(playlist) {
+            currentPlaylist = playlist;
+
             const tracksDiv = document.getElementById('playlistTracks');
             const metaDiv = document.getElementById('playlistMeta');
-            
+
             tracksDiv.innerHTML = '';
             metaDiv.textContent = `${playlist.length} songs • moods: ${selectedMoods.join(', ')}`;
 
@@ -743,15 +791,15 @@
                 const trackDiv = document.createElement('div');
                 trackDiv.className = 'track-item';
                 trackDiv.onclick = () => openInSpotify(track.external_urls?.spotify || '#');
-                
-                const artwork = track.album?.images?.length > 0 ? 
+
+                const artwork = track.album?.images?.length > 0 ?
                     `<img src="${track.album.images[2]?.url || track.album.images[0]?.url}" class="track-artwork" />` :
                     `<div class="track-artwork-placeholder">🎵</div>`;
-                
+
                 // Determine mood tag based on position and selected moods
                 const moodTag = index === 0 ? 'original' : selectedMoods[Math.floor(Math.random() * selectedMoods.length)];
                 const moodClass = `mood-${moodTag}`;
-                
+
                 trackDiv.innerHTML = `
                     <span class="track-number">${index + 1}</span>
                     ${artwork}
@@ -761,13 +809,21 @@
                     </div>
                     <span class="mood-tag ${moodClass}">${moodTag}</span>
                 `;
-                
+
                 tracksDiv.appendChild(trackDiv);
             });
 
             // Show playlist section
             document.getElementById('playlistSection').classList.add('show');
             document.getElementById('playlistSection').scrollIntoView({ behavior: 'smooth' });
+
+            // Show save button
+            const saveBtn = document.getElementById('saveBtn');
+            saveBtn.classList.add('show');
+            saveBtn.classList.remove('saved');
+            saveBtn.disabled    = false;
+            saveBtn.textContent = 'Save to Spotify';
+            document.getElementById('saveStatus').textContent = '';
         }
 
         function openInSpotify(url) {
@@ -811,7 +867,214 @@
             }
         }
 
-        window.addEventListener('load', function() {
+        // ── PKCE OAuth ────────────────────────────────────────────
+        let spotifyClientId = null;
+        let userAccessToken  = null;  // set after PKCE exchange
+        let currentPlaylist  = [];    // tracks in the current playlist (incl. seed)
+
+        const REDIRECT_URI  = window.location.origin + window.location.pathname.replace(/\/+$/, '') + '/';
+        const SCOPES        = 'playlist-modify-public playlist-modify-private';
+
+        function generateCodeVerifier(length = 128) {
+            const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-._~';
+            const arr   = new Uint8Array(length);
+            crypto.getRandomValues(arr);
+            return Array.from(arr, b => chars[b % chars.length]).join('');
+        }
+
+        async function generateCodeChallenge(verifier) {
+            const encoded = new TextEncoder().encode(verifier);
+            const digest  = await crypto.subtle.digest('SHA-256', encoded);
+            return btoa(String.fromCharCode(...new Uint8Array(digest)))
+                .replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+        }
+
+        async function initiateSpotifyLogin() {
+            if (!spotifyClientId) {
+                showError('Client ID not loaded yet — please wait a moment and try again.');
+                return;
+            }
+
+            // Persist the current playlist so we can save it after the redirect
+            sessionStorage.setItem('pendingPlaylist',  JSON.stringify(currentPlaylist));
+            sessionStorage.setItem('pendingMoods',     JSON.stringify(selectedMoods));
+            sessionStorage.setItem('pendingSeedSong',  JSON.stringify(currentSong));
+
+            const verifier   = generateCodeVerifier();
+            const challenge  = await generateCodeChallenge(verifier);
+            sessionStorage.setItem('pkce_verifier', verifier);
+
+            const params = new URLSearchParams({
+                response_type:         'code',
+                client_id:             spotifyClientId,
+                scope:                 SCOPES,
+                redirect_uri:          REDIRECT_URI,
+                code_challenge_method: 'S256',
+                code_challenge:        challenge,
+            });
+
+            window.location.href = 'https://accounts.spotify.com/authorize?' + params.toString();
+        }
+
+        async function exchangeSpotifyCode(code) {
+            const verifier = sessionStorage.getItem('pkce_verifier');
+            if (!verifier) throw new Error('Missing PKCE verifier');
+
+            const body = new URLSearchParams({
+                grant_type:    'authorization_code',
+                code,
+                redirect_uri:  REDIRECT_URI,
+                client_id:     spotifyClientId,
+                code_verifier: verifier,
+            });
+
+            const r = await fetch('https://accounts.spotify.com/api/token', {
+                method:  'POST',
+                headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+                body:    body.toString(),
+            });
+            if (!r.ok) throw new Error(`Token exchange failed: ${r.status}`);
+            const data = await r.json();
+            sessionStorage.removeItem('pkce_verifier');
+            return data.access_token;
+        }
+
+        async function createSpotifyPlaylist(token, tracks, name) {
+            // 1. Get current user ID
+            const meR = await fetch('https://api.spotify.com/v1/me', {
+                headers: { Authorization: `Bearer ${token}` },
+            });
+            if (!meR.ok) throw new Error(`Could not fetch user profile: ${meR.status}`);
+            const me = await meR.json();
+
+            // 2. Create playlist
+            const plR = await fetch(`https://api.spotify.com/v1/users/${me.id}/playlists`, {
+                method:  'POST',
+                headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+                body:    JSON.stringify({ name, description: 'Generated by Corriente Sound', public: true }),
+            });
+            if (!plR.ok) throw new Error(`Could not create playlist: ${plR.status}`);
+            const playlist = await plR.json();
+
+            // 3. Add tracks (max 100 per request; our playlists are < 15)
+            const uris = tracks
+                .filter(t => t?.uri)
+                .map(t => t.uri);
+
+            if (uris.length === 0) throw new Error('No valid track URIs to add');
+
+            const addR = await fetch(`https://api.spotify.com/v1/playlists/${playlist.id}/tracks`, {
+                method:  'POST',
+                headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+                body:    JSON.stringify({ uris }),
+            });
+            if (!addR.ok) throw new Error(`Could not add tracks: ${addR.status}`);
+
+            return playlist;
+        }
+
+        async function saveToSpotify() {
+            const saveBtn    = document.getElementById('saveBtn');
+            const saveStatus = document.getElementById('saveStatus');
+
+            // If we already have a user token, save immediately
+            if (userAccessToken) {
+                await doSave(userAccessToken);
+                return;
+            }
+
+            // Otherwise kick off PKCE flow
+            saveStatus.textContent = 'Redirecting to Spotify login…';
+            await initiateSpotifyLogin();
+        }
+
+        async function doSave(token) {
+            const saveBtn    = document.getElementById('saveBtn');
+            const saveStatus = document.getElementById('saveStatus');
+
+            saveBtn.disabled     = true;
+            saveBtn.textContent  = 'Saving…';
+            saveStatus.textContent = '';
+
+            try {
+                const moodLabel = selectedMoods.length ? selectedMoods.join(' + ') : 'mixed';
+                const seedName  = currentSong?.name || 'unknown';
+                const name      = `Corriente — ${seedName} (${moodLabel})`;
+
+                const playlist = await createSpotifyPlaylist(token, currentPlaylist, name);
+
+                saveBtn.textContent = 'Saved ✓';
+                saveBtn.classList.add('saved');
+                saveStatus.innerHTML = `Playlist created: <a href="${playlist.external_urls.spotify}" target="_blank">${playlist.name}</a>`;
+            } catch (err) {
+                console.error('Save error:', err);
+                saveBtn.disabled    = false;
+                saveBtn.textContent = 'Save to Spotify';
+                saveStatus.textContent = 'Save failed: ' + err.message;
+            }
+        }
+
+        async function checkOAuthCallback() {
+            const params = new URLSearchParams(window.location.search);
+            const code   = params.get('code');
+            const error  = params.get('error');
+
+            if (error) {
+                showError('Spotify login was cancelled or failed.');
+                history.replaceState({}, '', window.location.pathname);
+                return;
+            }
+
+            if (!code) return;
+
+            // Clean the URL immediately so a refresh doesn't re-trigger
+            history.replaceState({}, '', window.location.pathname);
+
+            // We need clientId before we can exchange — wait for it
+            if (!spotifyClientId) {
+                const cfg = await fetch(`${API_BASE}/config`).then(r => r.json()).catch(() => null);
+                if (cfg?.clientId) spotifyClientId = cfg.clientId;
+            }
+
+            try {
+                userAccessToken = await exchangeSpotifyCode(code);
+            } catch (err) {
+                showError('Could not complete Spotify login: ' + err.message);
+                return;
+            }
+
+            // Restore playlist state from sessionStorage
+            const pendingPlaylist  = JSON.parse(sessionStorage.getItem('pendingPlaylist')  || 'null');
+            const pendingMoods     = JSON.parse(sessionStorage.getItem('pendingMoods')     || 'null');
+            const pendingSeedSong  = JSON.parse(sessionStorage.getItem('pendingSeedSong')  || 'null');
+            sessionStorage.removeItem('pendingPlaylist');
+            sessionStorage.removeItem('pendingMoods');
+            sessionStorage.removeItem('pendingSeedSong');
+
+            if (pendingPlaylist && pendingPlaylist.length > 0) {
+                // Restore UI state
+                currentPlaylist = pendingPlaylist;
+                if (pendingMoods)    selectedMoods = pendingMoods;
+                if (pendingSeedSong) currentSong   = pendingSeedSong;
+
+                // Re-display the playlist
+                displayPlaylist(currentPlaylist);
+
+                // Auto-save now that we have the token
+                await doSave(userAccessToken);
+            }
+        }
+
+        window.addEventListener('load', async function() {
+            // Check for OAuth callback first (before auth)
+            await checkOAuthCallback();
+
+            // Fetch client ID for PKCE
+            fetch(`${API_BASE}/config`)
+                .then(r => r.json())
+                .then(cfg => { if (cfg?.clientId) spotifyClientId = cfg.clientId; })
+                .catch(() => {});
+
             authenticateSpotify();
         });
     </script>

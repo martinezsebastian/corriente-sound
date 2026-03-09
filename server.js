@@ -263,6 +263,11 @@ app.get('/api/health', (req, res) => {
     res.json({ status: 'OK', message: 'Corriente Sound API is running' });
 });
 
+// Expose public client ID so the frontend can run PKCE OAuth without embedding secrets
+app.get('/api/config', (req, res) => {
+    res.json({ clientId: SPOTIFY_CLIENT_ID });
+});
+
 app.post('/api/auth', async (req, res) => {
     try {
         await getSpotifyToken();
