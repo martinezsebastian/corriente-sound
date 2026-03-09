@@ -62,8 +62,8 @@ const MOOD_GENRE_AFFINITY = {
 const MOOD_LASTFM_TAGS = {
     upbeat:   ['dance', 'electronic'],
     chill:    ['chill', 'downtempo'],
-    groovy:   ['funk', 'soul'],
-    romantic: ['romance', 'soul'],
+    groovy:   ['funk', 'disco'],
+    romantic: ['romantic', 'love songs'],
 };
 
 // ── Helpers ───────────────────────────────────────────────────
