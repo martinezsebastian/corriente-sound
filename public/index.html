@@ -410,7 +410,14 @@
                         <span id="playIcon">▶️</span>
                     </button>
                 </div>
-
+                <div id="spotifyEmbed" style="display:none; margin-top: 12px;">
+                    <iframe id="spotifyIframe"
+                        style="border-radius: 10px; width: 100%; height: 80px;"
+                        frameborder="0"
+                        allowtransparency="true"
+                        allow="encrypted-media">
+                    </iframe>
+                </div>
             </div>
         </div>
 
@@ -466,7 +473,6 @@
         let selectedMoods = [];
         let currentSong = null;
         let searchTimeout = null;
-        let currentAudio = null;
 
         // Enhanced error handling for ReccoBeats integration
         function showError(message, details = null) {
@@ -632,12 +638,10 @@
         function selectSong(track) {
             currentSong = track;
 
-            // Stop any currently playing audio
-            if (currentAudio) {
-                currentAudio.pause();
-                currentAudio = null;
-                updatePlayButton(false);
-            }
+            // Reset embed if showing
+            document.getElementById('spotifyEmbed').style.display = 'none';
+            document.getElementById('spotifyIframe').src = '';
+            updatePlayButton(false);
 
             // Update selected song display
             document.getElementById('selectedTitle').textContent = track.name;
@@ -653,10 +657,10 @@
                 artworkPlaceholder.style.display = 'none';
             }
 
-            // Enable/disable play button
+            // Play button always enabled — uses Spotify embed
             const playBtn = document.getElementById('playBtn');
-            playBtn.disabled = !track.preview_url;
-            playBtn.style.opacity = track.preview_url ? '1' : '0.5';
+            playBtn.disabled = false;
+            playBtn.style.opacity = '1';
 
             document.getElementById('selectedSong').classList.add('show');
             document.getElementById('searchResults').classList.remove('show');
@@ -766,55 +770,29 @@
             }
         }
 
-        // Play/pause functionality
+        // Play via Spotify embed iframe
         function togglePlay() {
-            if (!currentSong) {
-                showError('No song selected');
-                return;
-            }
-            
-            if (!currentSong.preview_url) {
-                showError('No preview available for this song');
-                return;
-            }
+            if (!currentSong) return;
 
-            if (currentAudio && !currentAudio.paused) {
-                // Pause current audio
-                currentAudio.pause();
-                updatePlayButton(false);
+            const embedDiv   = document.getElementById('spotifyEmbed');
+            const iframe     = document.getElementById('spotifyIframe');
+            const playIcon   = document.getElementById('playIcon');
+
+            if (embedDiv.style.display !== 'none') {
+                // Hide embed (toggle off)
+                embedDiv.style.display = 'none';
+                iframe.src = '';
+                playIcon.textContent = '▶️';
             } else {
-                // Stop any previous audio
-                if (currentAudio) {
-                    currentAudio.pause();
-                }
-                
-                // Play new audio
-                currentAudio = new Audio(currentSong.preview_url);
-                
-                currentAudio.play().then(() => {
-                    updatePlayButton(true);
-                }).catch(error => {
-                    console.error('Audio play error:', error);
-                    showError('Failed to play audio: ' + error.message);
-                });
-
-                // Handle audio end
-                currentAudio.addEventListener('ended', () => {
-                    updatePlayButton(false);
-                });
-                
-                // Handle audio errors
-                currentAudio.addEventListener('error', (e) => {
-                    console.error('Audio error:', e);
-                    showError('Audio playback failed');
-                    updatePlayButton(false);
-                });
+                // Show Spotify embed — plays 30s preview without any auth
+                iframe.src = `https://open.spotify.com/embed/track/${currentSong.id}?utm_source=generator&theme=0`;
+                embedDiv.style.display = 'block';
+                playIcon.textContent = '⏸️';
             }
         }
 
         function updatePlayButton(isPlaying) {
-            const playIcon = document.getElementById('playIcon');
-            playIcon.textContent = isPlaying ? '⏸️' : '▶️';
+            document.getElementById('playIcon').textContent = isPlaying ? '⏸️' : '▶️';
         }
 
         // Utility functions
