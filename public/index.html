@@ -199,11 +199,12 @@
             padding: 12px;
             background: #374151;
             border-radius: 8px;
+            margin-bottom: 10px;
             transition: all 0.3s;
             cursor: pointer;
             border: 2px solid transparent;
         }
-        
+
         .similar-song-item:hover {
             background: #4b5563;
             border-color: #ec4899;
@@ -282,20 +283,7 @@
             gap: 10px;
         }
         
-        .similar-song-item {
-            display: flex;
-            align-items: center;
-            padding: 15px;
-            background: #374151;
-            border-radius: 10px;
-            margin-bottom: 10px;
-            transition: background-color 0.3s;
-            cursor: pointer;
-        }
-        
-        .similar-song-item:hover {
-            background: #4b5563;
-        }
+        /* .similar-song-item defined above */
         
         .pipeline-info {
             font-size: 0.8rem;
@@ -464,7 +452,9 @@
         }
 
         .playlist-tracks {
-            space-y: 10px;
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
         }
 
         .track-item {
@@ -591,16 +581,7 @@
             <p class="subtitle">Play your Current</p>
         </div>
 
-        <!-- Authentication Section -->
-        <div class="auth-section" id="authSection">
-            <h2 style="margin-bottom: 20px;">Connect to Music Services</h2>
-            <p style="margin-bottom: 25px; color: #d1d5db;">
-                We use Spotify for song search and ReccoBeats for advanced audio analysis and mood detection.
-            </p>
-            <button class="spotify-btn" onclick="authenticateSpotify()">
-                🎵 Connect Music Services
-            </button>
-        </div>
+        <!-- Authentication happens automatically on load -->
 
         <!-- Error Display -->
         <div class="error" id="errorDisplay"></div>
@@ -705,11 +686,6 @@
         </div>
     </div>
 
-    <!-- Service Status Indicator -->
-    <div class="service-status" id="serviceStatus" style="display: none;">
-        <div class="status-item">🔍 <span>Search: Spotify</span></div>
-        <div class="status-item">🎯 <span>Analysis: ReccoBeats</span></div>
-    </div>
 
     <script>
         // API Configuration - Now points to our backend with ReccoBeats integration
@@ -752,42 +728,21 @@
             }, 7000);
         }
 
-        // Enhanced authentication with service information
         async function authenticateSpotify() {
             showLoading(true);
-            
             try {
-                const response = await fetch(`${API_BASE}/auth`, {
-                    method: 'POST'
-                });
-
-                if (!response.ok) {
-                    const errorData = await response.json().catch(() => ({}));
-                    throw new Error(errorData.error || 'Authentication failed');
-                }
-
+                const response = await fetch(`${API_BASE}/auth`, { method: 'POST' });
+                if (!response.ok) throw new Error('Authentication failed');
                 const data = await response.json();
                 if (data.success) {
                     isAuthenticated = true;
-                    
-                    // Hide auth section, show search
-                    document.getElementById('authSection').classList.add('hidden');
                     document.getElementById('searchSection').classList.remove('hidden');
-                    
-                    console.log('✅ Music services connected successfully!');
-                    console.log('🎵 Search: Spotify API');
-                    console.log('🎯 Analysis: ReccoBeats API');
-                    
-                    // Show service status briefly
-                    showServiceStatus();
                 } else {
                     throw new Error(data.error || 'Authentication failed');
                 }
-                
             } catch (error) {
-                showError('Failed to connect to music services: ' + error.message);
+                showError('Could not connect to Spotify. Please refresh and try again.');
             }
-            
             showLoading(false);
         }
 
@@ -1252,7 +1207,7 @@
             const metaDiv = document.getElementById('playlistMeta');
             
             tracksDiv.innerHTML = '';
-            metaDiv.textContent = `${playlist.length} songs • Generated with moods: ${selectedMoods.join(', ')} • Powered by ReccoBeats`;
+            metaDiv.textContent = `${playlist.length} songs • moods: ${selectedMoods.join(', ')}`;
 
             playlist.forEach((track, index) => {
                 const trackDiv = document.createElement('div');
@@ -1342,17 +1297,6 @@
             playIcon.textContent = isPlaying ? '⏸️' : '▶️';
         }
 
-        // Show service status indicator
-        function showServiceStatus() {
-            const statusDiv = document.getElementById('serviceStatus');
-            statusDiv.style.display = 'block';
-            
-            // Auto-hide after 5 seconds
-            setTimeout(() => {
-                statusDiv.style.display = 'none';
-            }, 5000);
-        }
-
         // Utility functions
         function showLoading(show) {
             const loading = document.getElementById('loadingIndicator');
@@ -1363,18 +1307,8 @@
             }
         }
 
-        // Handle URL parameters for Spotify callback
         window.addEventListener('load', function() {
-            const params = new URLSearchParams(window.location.search);
-            const code = params.get('code');
-            
-            if (code) {
-                // Handle Spotify callback (for future user auth)
-                console.log('Spotify callback code:', code);
-            }
-            
-            // Show initial service status
-            setTimeout(showServiceStatus, 1000);
+            authenticateSpotify();
         });
     </script>
 </body>
