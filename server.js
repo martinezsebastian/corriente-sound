@@ -44,26 +44,29 @@ async function getSpotifyToken() {
     return spotifyAccessToken;
 }
 
-// ── Mood → search term mapping ────────────────────────────────
-// Plain-text terms (no genre: field filter — that only works for type=artist, not type=track)
+// ── Mood → genre affinity ─────────────────────────────────────
+// Used to rank related artists by how well their genres match the selected mood.
 
-const MOOD_TERMS = {
-    upbeat:   'dance electronic energetic upbeat',
-    chill:    'acoustic chill ambient mellow',
-    groovy:   'funk groove soul disco',
-    romantic: 'soul love ballad romantic',
+const MOOD_GENRE_AFFINITY = {
+    upbeat:   ['dance', 'pop', 'electronic', 'edm', 'house', 'disco', 'club', 'funk', 'energetic'],
+    chill:    ['acoustic', 'ambient', 'folk', 'indie', 'chill', 'soft', 'lo-fi', 'singer-songwriter', 'dream'],
+    groovy:   ['funk', 'soul', 'disco', 'r&b', 'groove', 'motown', 'jazz', 'afrobeat'],
+    romantic: ['soul', 'r&b', 'ballad', 'jazz', 'bossa', 'classical', 'soft rock', 'neo soul'],
 };
 
 // ── Helpers ───────────────────────────────────────────────────
 
-function similarityScore(candidate, original) {
-    let score = 1.0;
-    if (candidate.artists[0].name.toLowerCase() === original.artists[0].name.toLowerCase()) score -= 0.30;
-    score -= Math.abs(candidate.popularity - original.popularity) / 100 * 0.10;
-    score -= Math.min(Math.abs(candidate.duration_ms - original.duration_ms) / original.duration_ms, 0.5) * 0.10;
-    if (candidate.preview_url)                    score += 0.10;
-    if (candidate.explicit === original.explicit) score += 0.05;
-    return Math.max(0, score);
+function moodGenreScore(artistGenres, moods) {
+    if (!moods.length) return 0.5;
+    const genreStr = artistGenres.join(' ').toLowerCase();
+    let hits = 0;
+    for (const mood of moods) {
+        for (const term of (MOOD_GENRE_AFFINITY[mood] || [])) {
+            if (genreStr.includes(term)) hits++;
+        }
+    }
+    // Normalize: each mood can contribute up to ~3 hits realistically
+    return Math.min(1, hits / (moods.length * 3));
 }
 
 function deduplicate(tracks) {
@@ -76,64 +79,88 @@ function deduplicate(tracks) {
     });
 }
 
-// ── Parallel similarity search ────────────────────────────────
-// NOTE: genre: field filter only works for type=artist searches, NOT type=track.
-// We use plain-text genre terms and year: filters instead.
+// ── Related-artist recommendation engine ─────────────────────
+//
+// Strategy:
+//   1. Fetch Spotify's related artists for the seed track's artist
+//      (these are genuinely musically similar — Spotify's own graph).
+//   2. Rank related artists by how well their genre tags match the mood.
+//   3. Pull top tracks from the best-matched related artists in parallel.
+//   4. Mix in a couple of the seed artist's own tracks.
+//   5. Fallback to text search if related artists come back empty.
 
 async function findSimilarTracks(originalTrack, token, moods = []) {
-    const { artists, album } = originalTrack;
-    const artistName  = artists[0].name;
-    const artistId    = artists[0].id;
-    const releaseYear = album.release_date ? album.release_date.split('-')[0] : null;
-    const decade      = releaseYear ? Math.floor(Number(releaseYear) / 10) * 10 : null;
+    const artistId   = originalTrack.artists[0].id;
+    const artistName = originalTrack.artists[0].name;
+    const headers    = { Authorization: `Bearer ${token}` };
 
-    // Fetch real artist genres (plain text, used as search terms)
-    let genres = [];
+    // 1. Related artists
+    let relatedArtists = [];
     try {
-        const r = await fetch(`https://api.spotify.com/v1/artists/${artistId}`, {
-            headers: { Authorization: `Bearer ${token}` },
-        });
-        if (r.ok) genres = (await r.json()).genres || [];
+        const r = await fetch(`https://api.spotify.com/v1/artists/${artistId}/related-artists`, { headers });
+        if (r.ok) relatedArtists = (await r.json()).artists || [];
     } catch (_) {}
 
-    const genreText = genres.slice(0, 2).join(' ') || 'pop';
-    const moodText  = moods.map(m => MOOD_TERMS[m] || '').filter(Boolean).join(' ');
-    const combinedText = [genreText, moodText].filter(Boolean).join(' ');
+    console.log(`🎸 ${originalTrack.name} — ${relatedArtists.length} related artists, moods: [${moods.join(', ') || 'none'}]`);
 
-    console.log(`🎸 ${originalTrack.name} — genres: [${genres.join(', ') || 'none'}] moods: [${moods.join(', ') || 'none'}]`);
+    // 2. Score and pick top 7 by mood-genre fit
+    const picked = relatedArtists
+        .map(a => ({ ...a, _moodScore: moodGenreScore(a.genres, moods) }))
+        .sort((a, b) => b._moodScore - a._moodScore)
+        .slice(0, 7);
 
-    const strategies = [
-        // Artist discography (most reliable — always returns results)
-        { desc: 'same artist',  q: `artist:"${artistName}"` },
-        // Genre + mood terms as plain text
-        { desc: 'genre+mood',   q: combinedText },
-        // Same decade + genre text (era match)
-        decade ? { desc: 'era match', q: `year:${decade}-${decade + 9} ${genreText}` } : null,
-        // Mood terms alone (broader net)
-        moodText ? { desc: 'mood direct', q: moodText } : { desc: 'genre direct', q: genreText },
-        // Same album (for album-mates)
-        { desc: 'same album',   q: `album:"${album.name}"` },
-    ].filter(Boolean);
+    // 3. Top tracks from each related artist (3 tracks each) + seed artist's own tracks
+    const artistsToFetch = [
+        ...picked,
+        { id: artistId, name: artistName, _moodScore: 1.0, _isSeedArtist: true },
+    ];
 
-    const results = await Promise.allSettled(
-        strategies.map(({ desc, q }) =>
-            fetch(`https://api.spotify.com/v1/search?q=${encodeURIComponent(q)}&type=track&limit=12`, {
-                headers: { Authorization: `Bearer ${token}` },
-            })
+    const trackResults = await Promise.allSettled(
+        artistsToFetch.map(artist =>
+            fetch(`https://api.spotify.com/v1/artists/${artist.id}/top-tracks?market=US`, { headers })
             .then(r => r.ok ? r.json() : null)
             .then(data => {
-                if (!data?.tracks?.items) return [];
-                return data.tracks.items
+                if (!data?.tracks) return [];
+                const limit = artist._isSeedArtist ? 2 : 3;
+                return data.tracks
                     .filter(t => t.id !== originalTrack.id)
-                    .map(t => ({ ...t, _strategy: desc, _similarity: similarityScore(t, originalTrack) }));
+                    .slice(0, limit)
+                    .map(t => ({
+                        ...t,
+                        _strategy: artist._isSeedArtist ? 'seed artist' : 'related artist',
+                        _similarity: artist._isSeedArtist ? 0.90 : 0.65 + artist._moodScore * 0.30,
+                    }));
             })
             .catch(() => [])
         )
     );
 
-    const all = results.flatMap(r => r.status === 'fulfilled' ? r.value : []);
-    const sorted = deduplicate(all).sort((a, b) => b._similarity - a._similarity);
-    console.log(`🎯 Found ${sorted.length} candidates`);
+    let all = trackResults.flatMap(r => r.status === 'fulfilled' ? r.value : []);
+
+    // 4. Fallback: if related artists were empty, do a text search on artist name
+    if (all.filter(t => t._strategy === 'related artist').length < 3) {
+        console.log('⚠️  Related artists sparse — falling back to text search');
+        try {
+            const r = await fetch(
+                `https://api.spotify.com/v1/search?q=artist:"${encodeURIComponent(artistName)}"&type=track&limit=15`,
+                { headers }
+            );
+            if (r.ok) {
+                const data = await r.json();
+                const fallback = (data.tracks?.items || [])
+                    .filter(t => t.id !== originalTrack.id && t.artists[0].name !== artistName)
+                    .slice(0, 10)
+                    .map(t => ({ ...t, _strategy: 'fallback search', _similarity: 0.55 }));
+                all = [...all, ...fallback];
+            }
+        } catch (_) {}
+    }
+
+    const sorted = deduplicate(all)
+        .filter(t => t.id !== originalTrack.id)
+        .sort((a, b) => b._similarity - a._similarity);
+
+    console.log(`🎯 ${sorted.length} candidates from ${picked.length} related artists`);
     return sorted;
 }
 
