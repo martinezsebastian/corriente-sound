@@ -248,7 +248,7 @@ app.get('/api/recommendations', async (req, res) => {
         });
         if (!r.ok) return res.json([]);
         const trackData = await r.json();
-        const moodList  = moods.split(',').filter(m => m && MOOD_TERMS[m]);
+        const moodList  = moods.split(',').filter(m => m && MOOD_GENRE_AFFINITY[m]);
         const similar   = await findSimilarTracks(trackData, token, moodList);
         res.json(similar.slice(0, Number(limit)));
     } catch (err) {
