@@ -14,6 +14,7 @@ app.use(express.static('public'));
 
 const SPOTIFY_CLIENT_ID     = process.env.SPOTIFY_CLIENT_ID;
 const SPOTIFY_CLIENT_SECRET = process.env.SPOTIFY_CLIENT_SECRET;
+const LASTFM_API_KEY        = process.env.LASTFM_API_KEY || '7243445ee40326b73890c4bac762138d';
 
 if (!SPOTIFY_CLIENT_ID || !SPOTIFY_CLIENT_SECRET) {
     console.error('❌ Missing Spotify credentials. Set SPOTIFY_CLIENT_ID and SPOTIFY_CLIENT_SECRET.');
@@ -81,105 +82,130 @@ function deduplicate(tracks) {
 
 // ── Recommendation engine ─────────────────────────────────────
 //
-// /v1/artists/{id}/related-artists was deprecated Nov 2024.
-// /v1/recommendations was also deprecated for third-party apps.
-//
-// Working approach:
-//   1. Get seed artist's genres via /v1/artists/{id}
-//   2. Search for OTHER artists sharing those genres (genre: filter works for type=artist)
-//   3. Rank those artists by mood-genre affinity
-//   4. Pull top tracks from the best-matched artists in parallel
-//   5. Mix in 2 of the seed artist's own tracks
+// Primary:  Last.fm track.getSimilar — real listening-pattern similarity
+// Hydrate:  Spotify search → full track objects (artwork, preview URLs)
+// Mood:     batch-fetch artist genres → score by mood-genre affinity
+// Fallback: Spotify genre-artist search if Last.fm returns nothing
 
 async function findSimilarTracks(originalTrack, token, moods = []) {
     const artistId   = originalTrack.artists[0].id;
     const artistName = originalTrack.artists[0].name;
+    const trackName  = originalTrack.name;
     const headers    = { Authorization: `Bearer ${token}` };
 
-    // 1. Get seed artist's genres
-    let seedGenres = [];
+    // 1. Last.fm similar tracks (listening-pattern based)
+    let lfmTracks = [];
     try {
-        const r = await fetch(`https://api.spotify.com/v1/artists/${artistId}`, { headers });
-        if (r.ok) seedGenres = (await r.json()).genres || [];
+        const url = `https://ws.audioscrobbler.com/2.0/?method=track.getsimilar` +
+            `&artist=${encodeURIComponent(artistName)}&track=${encodeURIComponent(trackName)}` +
+            `&api_key=${LASTFM_API_KEY}&format=json&limit=25&autocorrect=1`;
+        const r = await fetch(url);
+        if (r.ok) {
+            const data = await r.json();
+            lfmTracks = data.similartracks?.track || [];
+        }
     } catch (_) {}
 
-    console.log(`🎸 ${originalTrack.name} — genres: [${seedGenres.slice(0,3).join(', ') || 'none'}] moods: [${moods.join(', ') || 'none'}]`);
+    console.log(`🎸 Last.fm: ${lfmTracks.length} similar tracks for "${trackName}" by ${artistName}, moods: [${moods.join(', ') || 'none'}]`);
 
-    // 2. Search for artists sharing the seed's genres.
-    //    genre: field filter DOES work for type=artist searches.
-    //    Run 2 queries in parallel: primary (specific genres) + mood-adjusted.
-    const primaryGenre = seedGenres[0] || 'pop';
-    const secondGenre  = seedGenres[1] || seedGenres[0] || 'indie';
-
-    const moodAffinityTerms = moods.flatMap(m => (MOOD_GENRE_AFFINITY[m] || []).slice(0, 2));
-    const moodGenre = moodAffinityTerms[0] || primaryGenre;
-
-    const searchArtistsByGenre = (genre, limit = 20) => {
-        const q = encodeURIComponent(`genre:"${genre}"`);
-        return fetch(`https://api.spotify.com/v1/search?q=${q}&type=artist&limit=${limit}`, { headers })
-            .then(r => r.ok ? r.json() : null)
-            .then(d => d?.artists?.items || [])
-            .catch(() => []);
-    };
-
-    const artistSearches = await Promise.allSettled([
-        searchArtistsByGenre(primaryGenre, 20),
-        searchArtistsByGenre(secondGenre, 20),
-        moodGenre !== primaryGenre ? searchArtistsByGenre(moodGenre, 15) : Promise.resolve([]),
-    ]);
-
-    // Merge, deduplicate by artist id, exclude the seed artist
-    const allArtists = artistSearches
-        .flatMap(r => r.status === 'fulfilled' ? r.value : [])
-        .filter(a => a.id !== artistId);
-
-    const seenArtists = new Set();
-    const uniqueArtists = allArtists.filter(a => {
-        if (seenArtists.has(a.id)) return false;
-        seenArtists.add(a.id);
-        return true;
-    });
-
-    // 3. Score by mood-genre fit, take top 7
-    const picked = uniqueArtists
-        .map(a => ({ ...a, _moodScore: moodGenreScore(a.genres, moods) }))
-        .sort((a, b) => b._moodScore - a._moodScore)
-        .slice(0, 7);
-
-    console.log(`👥 ${uniqueArtists.length} candidate artists → picked top ${picked.length}`);
-
-    // 4. Top tracks from each picked artist (3 tracks each) + 2 seed-artist tracks
-    const artistsToFetch = [
-        ...picked.map(a => ({ ...a, _isSeedArtist: false })),
-        { id: artistId, name: artistName, _moodScore: 1.0, _isSeedArtist: true },
-    ];
-
-    const trackResults = await Promise.allSettled(
-        artistsToFetch.map(artist =>
-            fetch(`https://api.spotify.com/v1/artists/${artist.id}/top-tracks?market=US`, { headers })
-            .then(r => r.ok ? r.json() : null)
-            .then(data => {
-                if (!data?.tracks) return [];
-                const limit = artist._isSeedArtist ? 2 : 3;
-                return data.tracks
-                    .filter(t => t.id !== originalTrack.id)
-                    .slice(0, limit)
-                    .map(t => ({
-                        ...t,
-                        _strategy: artist._isSeedArtist ? 'seed artist' : 'genre match',
-                        _similarity: artist._isSeedArtist ? 0.90 : 0.60 + artist._moodScore * 0.35,
-                    }));
-            })
-            .catch(() => [])
-        )
+    // 2. Hydrate with Spotify — search for each Last.fm track to get artwork/preview
+    const hydrated = await Promise.allSettled(
+        lfmTracks.slice(0, 20).map(lfm => {
+            const q = encodeURIComponent(`track:"${lfm.name}" artist:"${lfm.artist.name}"`);
+            return fetch(`https://api.spotify.com/v1/search?q=${q}&type=track&limit=1`, { headers })
+                .then(r => r.ok ? r.json() : null)
+                .then(data => {
+                    const t = data?.tracks?.items?.[0];
+                    if (!t) return null;
+                    return { ...t, _lfmMatch: Number(lfm.match), _strategy: 'lastfm' };
+                })
+                .catch(() => null);
+        })
     );
 
-    const all = trackResults.flatMap(r => r.status === 'fulfilled' ? r.value : []);
-    const sorted = deduplicate(all)
-        .filter(t => t.id !== originalTrack.id)
-        .sort((a, b) => b._similarity - a._similarity);
+    let tracks = hydrated
+        .flatMap(r => r.status === 'fulfilled' && r.value ? [r.value] : [])
+        .filter(t => t.id !== originalTrack.id);
 
-    console.log(`🎯 ${sorted.length} total candidates`);
+    // 3. Batch-fetch artist genres → mood scoring (one Spotify call for all artists)
+    if (tracks.length > 0) {
+        const uniqueArtistIds = [...new Set(tracks.map(t => t.artists[0].id))].slice(0, 50);
+        try {
+            const r = await fetch(`https://api.spotify.com/v1/artists?ids=${uniqueArtistIds.join(',')}`, { headers });
+            if (r.ok) {
+                const genreMap = {};
+                ((await r.json()).artists || []).forEach(a => { genreMap[a.id] = a.genres || []; });
+                tracks = tracks.map(t => ({
+                    ...t,
+                    _similarity: t._lfmMatch * (moods.length
+                        ? 0.6 + moodGenreScore(genreMap[t.artists[0].id] || [], moods) * 0.4
+                        : 1.0),
+                }));
+            }
+        } catch (_) {
+            tracks = tracks.map(t => ({ ...t, _similarity: t._lfmMatch }));
+        }
+    }
+
+    // 4. Always mix in 2 of the seed artist's own top tracks
+    try {
+        const r = await fetch(`https://api.spotify.com/v1/artists/${artistId}/top-tracks?market=US`, { headers });
+        if (r.ok) {
+            ((await r.json()).tracks || [])
+                .filter(t => t.id !== originalTrack.id)
+                .slice(0, 2)
+                .forEach(t => tracks.push({ ...t, _strategy: 'seed artist', _similarity: 0.9 }));
+        }
+    } catch (_) {}
+
+    // 5. Fallback: if Last.fm returned nothing, use Spotify genre-artist search
+    if (tracks.filter(t => t._strategy === 'lastfm').length < 3) {
+        console.log('⚠️  Last.fm sparse — falling back to genre-artist search');
+        let seedGenres = [];
+        try {
+            const r = await fetch(`https://api.spotify.com/v1/artists/${artistId}`, { headers });
+            if (r.ok) seedGenres = (await r.json()).genres || [];
+        } catch (_) {}
+
+        const primaryGenre = seedGenres[0] || 'pop';
+        const moodGenre    = moods.flatMap(m => MOOD_GENRE_AFFINITY[m] || []).find(Boolean) || primaryGenre;
+
+        const searchByGenre = (genre, limit) => {
+            const q = encodeURIComponent(`genre:"${genre}"`);
+            return fetch(`https://api.spotify.com/v1/search?q=${q}&type=artist&limit=${limit}`, { headers })
+                .then(r => r.ok ? r.json() : null).then(d => d?.artists?.items || []).catch(() => []);
+        };
+
+        const [primary, moodArtists] = await Promise.all([
+            searchByGenre(primaryGenre, 20),
+            moodGenre !== primaryGenre ? searchByGenre(moodGenre, 15) : Promise.resolve([]),
+        ]);
+
+        const seen = new Set([artistId]);
+        const picked = [...primary, ...moodArtists]
+            .filter(a => { if (seen.has(a.id)) return false; seen.add(a.id); return true; })
+            .map(a => ({ ...a, _moodScore: moodGenreScore(a.genres, moods) }))
+            .sort((a, b) => b._moodScore - a._moodScore)
+            .slice(0, 7);
+
+        const fallbackResults = await Promise.allSettled(
+            picked.map(artist =>
+                fetch(`https://api.spotify.com/v1/artists/${artist.id}/top-tracks?market=US`, { headers })
+                .then(r => r.ok ? r.json() : null)
+                .then(data => (data?.tracks || [])
+                    .filter(t => t.id !== originalTrack.id).slice(0, 3)
+                    .map(t => ({ ...t, _strategy: 'genre fallback', _similarity: 0.6 + artist._moodScore * 0.35 }))
+                ).catch(() => [])
+            )
+        );
+        fallbackResults.flatMap(r => r.status === 'fulfilled' ? r.value : []).forEach(t => tracks.push(t));
+    }
+
+    const sorted = deduplicate(tracks)
+        .filter(t => t.id !== originalTrack.id)
+        .sort((a, b) => (b._similarity || 0) - (a._similarity || 0));
+
+    console.log(`🎯 ${sorted.length} candidates (${tracks.filter(t=>t._strategy==='lastfm').length} from Last.fm)`);
     return sorted;
 }
 
