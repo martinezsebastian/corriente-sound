@@ -114,18 +114,18 @@ async function findSimilarTracks(originalTrack, token, moods = []) {
     const moodAffinityTerms = moods.flatMap(m => (MOOD_GENRE_AFFINITY[m] || []).slice(0, 2));
     const moodGenre = moodAffinityTerms[0] || primaryGenre;
 
+    const searchArtistsByGenre = (genre, limit = 20) => {
+        const q = encodeURIComponent(`genre:"${genre}"`);
+        return fetch(`https://api.spotify.com/v1/search?q=${q}&type=artist&limit=${limit}`, { headers })
+            .then(r => r.ok ? r.json() : null)
+            .then(d => d?.artists?.items || [])
+            .catch(() => []);
+    };
+
     const artistSearches = await Promise.allSettled([
-        // Primary: artists in seed's main genre
-        fetch(`https://api.spotify.com/v1/search?q=genre:"${encodeURIComponent(primaryGenre)}"&type=artist&limit=20`, { headers })
-            .then(r => r.ok ? r.json() : null).then(d => d?.artists?.items || []).catch(() => []),
-        // Secondary: artists in seed's second genre (different slice of results)
-        fetch(`https://api.spotify.com/v1/search?q=genre:"${encodeURIComponent(secondGenre)}"&type=artist&limit=20`, { headers })
-            .then(r => r.ok ? r.json() : null).then(d => d?.artists?.items || []).catch(() => []),
-        // Mood-adjusted: artists in a genre that fits the selected mood
-        moodGenre !== primaryGenre
-            ? fetch(`https://api.spotify.com/v1/search?q=genre:"${encodeURIComponent(moodGenre)}"&type=artist&limit=15`, { headers })
-                .then(r => r.ok ? r.json() : null).then(d => d?.artists?.items || []).catch(() => [])
-            : Promise.resolve([]),
+        searchArtistsByGenre(primaryGenre, 20),
+        searchArtistsByGenre(secondGenre, 20),
+        moodGenre !== primaryGenre ? searchArtistsByGenre(moodGenre, 15) : Promise.resolve([]),
     ]);
 
     // Merge, deduplicate by artist id, exclude the seed artist
