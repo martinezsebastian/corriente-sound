@@ -78,43 +78,60 @@ function deduplicate(tracks) {
 
 // ── Recommendation engine ─────────────────────────────────────
 //
-// 1. Last.fm track.getSimilar  — co-listened track candidates
-// 2. Spotify hydration         — full track objects (artwork, URI)
-// 3. Last.fm tag filter        — keep full score if track tags match mood,
-//                                deprioritize those that don't
-// 4. Seed artist top tracks    — 2 tracks from the same artist
-// 5. Fallback                  — genre search if Last.fm returns nothing
+// 1. Last.fm artist.getSimilar  — find artists in the same space
+// 2. Last.fm artist.getTopTracks — top tracks per similar artist
+// 3. Spotify hydration          — full track objects (artwork, URI)
+// 4. Last.fm tag filter         — keep only tracks matching selected mood
+// 5. Seed artist top tracks     — 2 tracks from the same artist
+// 6. Fallback                   — genre search if Last.fm returns nothing
 
 async function findSimilarTracks(originalTrack, token, moods = []) {
     const artistId   = originalTrack.artists[0].id;
     const artistName = originalTrack.artists[0].name;
-    const trackName  = originalTrack.name;
     const headers    = { Authorization: `Bearer ${token}` };
 
-    // 1. Last.fm similar tracks (listening-pattern based)
-    let lfmTracks = [];
+    // 1. Last.fm similar artists
+    let similarArtists = [];
     try {
-        const url = `https://ws.audioscrobbler.com/2.0/?method=track.getsimilar` +
-            `&artist=${encodeURIComponent(artistName)}&track=${encodeURIComponent(trackName)}` +
-            `&api_key=${LASTFM_API_KEY}&format=json&limit=50&autocorrect=1`;
+        const url = `https://ws.audioscrobbler.com/2.0/?method=artist.getSimilar` +
+            `&artist=${encodeURIComponent(artistName)}` +
+            `&api_key=${LASTFM_API_KEY}&format=json&limit=20&autocorrect=1`;
         const r = await fetch(url);
         if (r.ok) {
             const data = await r.json();
-            lfmTracks = data.similartracks?.track || [];
+            similarArtists = data.similarartists?.artist || [];
         }
     } catch (_) {}
 
-    console.log(`🎸 Last.fm: ${lfmTracks.length} similar tracks for "${trackName}" by ${artistName}, moods: [${moods.join(', ') || 'none'}]`);
+    console.log(`🎸 Last.fm: ${similarArtists.length} similar artists for "${artistName}", moods: [${moods.join(', ') || 'none'}]`);
 
-    // 2. Hydrate with Spotify (batched to avoid rate limits)
-    const hydrated = await batchedPromiseAll(lfmTracks.slice(0, 40), lfm => {
-        const q = encodeURIComponent(`track:"${lfm.name}" artist:"${lfm.artist.name}"`);
+    // 2. Top tracks for each similar artist
+    const artistTrackFetches = await batchedPromiseAll(similarArtists.slice(0, 15), artist => {
+        const url = `https://ws.audioscrobbler.com/2.0/?method=artist.getTopTracks` +
+            `&artist=${encodeURIComponent(artist.name)}` +
+            `&api_key=${LASTFM_API_KEY}&format=json&limit=5&autocorrect=1`;
+        return fetch(url)
+            .then(r => r.ok ? r.json() : null)
+            .then(data => (data?.toptracks?.track || []).map(t => ({
+                name: t.name,
+                artist: artist.name,
+                _artistMatch: Number(artist.match),
+            })))
+            .catch(() => []);
+    }, 8);
+
+    const trackCandidates = artistTrackFetches.flatMap(r => r.status === 'fulfilled' ? r.value : []);
+    console.log(`📋 ${trackCandidates.length} track candidates from similar artists`);
+
+    // 3. Hydrate with Spotify
+    const hydrated = await batchedPromiseAll(trackCandidates, lfm => {
+        const q = encodeURIComponent(`track:"${lfm.name}" artist:"${lfm.artist}"`);
         return fetch(`https://api.spotify.com/v1/search?q=${q}&type=track&limit=1`, { headers })
             .then(r => r.ok ? r.json() : null)
             .then(data => {
                 const t = data?.tracks?.items?.[0];
                 if (!t) return null;
-                return { ...t, _lfmMatch: Number(lfm.match), _strategy: 'lastfm' };
+                return { ...t, _lfmMatch: lfm._artistMatch, _strategy: 'lastfm' };
             })
             .catch(() => null);
     }, 10);
@@ -123,11 +140,9 @@ async function findSimilarTracks(originalTrack, token, moods = []) {
         .flatMap(r => r.status === 'fulfilled' && r.value ? [r.value] : [])
         .filter(t => t.id !== originalTrack.id);
 
-    const lfmHydratedCount = tracks.length; // snapshot before mood filter, for fallback check
+    const lfmHydratedCount = tracks.length;
 
-    // 3. Tag filter: fetch Last.fm tags for each hydrated track.
-    //    Tracks whose tags match the selected mood keep their full _lfmMatch score.
-    //    Tracks that don't match are heavily deprioritized (not discarded, as a safety net).
+    // 4. Tag filter by mood
     if (moods.length > 0 && tracks.length > 0) {
         const moodTagSet = new Set(moods.flatMap(m => MOOD_LASTFM_TAGS[m] || []));
 
@@ -163,7 +178,7 @@ async function findSimilarTracks(originalTrack, token, moods = []) {
         tracks = tracks.map(t => ({ ...t, _similarity: t._lfmMatch }));
     }
 
-    // 4. Seed artist's own top tracks (2)
+    // 5. Seed artist's own top tracks (2)
     try {
         const r = await fetch(`https://api.spotify.com/v1/artists/${artistId}/top-tracks?market=US`, { headers });
         if (r.ok) {
@@ -174,7 +189,7 @@ async function findSimilarTracks(originalTrack, token, moods = []) {
         }
     } catch (_) {}
 
-    // 5. Fallback: only if Last.fm genuinely didn't know the song (before mood filtering)
+    // 6. Fallback: only if Last.fm genuinely didn't know the artist
     if (lfmHydratedCount < 3) {
         console.log('⚠️  Last.fm sparse — falling back to genre-artist search');
         let seedGenres = [];
@@ -211,7 +226,7 @@ async function findSimilarTracks(originalTrack, token, moods = []) {
         .filter(t => t.id !== originalTrack.id)
         .sort((a, b) => (b._similarity || 0) - (a._similarity || 0));
 
-    console.log(`🎯 ${sorted.length} candidates (${tracks.filter(t=>t._strategy==='lastfm').length} from Last.fm)`);
+    console.log(`🎯 ${sorted.length} final tracks`);
     return sorted;
 }
 
