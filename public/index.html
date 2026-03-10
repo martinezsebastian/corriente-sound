@@ -822,7 +822,7 @@
                     return;
                 }
 
-                appendTracks(newTracks);
+                await appendTracks(newTracks);
             } catch (error) {
                 console.error('Add more failed:', error);
             } finally {
@@ -881,10 +881,18 @@
             document.getElementById('addMoreSection').classList.add('show');
         }
 
-        function appendTracks(newTracks) {
-            const tracksDiv = document.getElementById('tracksDiv');
-            const offset    = currentPlaylist.length;
+        async function pushTracksToPlaylist(playlistId, tracks) {
+            const uris = tracks.filter(t => t?.uri).map(t => t.uri);
+            if (!uris.length) return;
+            await fetch(`https://api.spotify.com/v1/playlists/${playlistId}/tracks`, {
+                method:  'POST',
+                headers: { Authorization: `Bearer ${userAccessToken}`, 'Content-Type': 'application/json' },
+                body:    JSON.stringify({ uris }),
+            });
+        }
 
+        async function appendTracks(newTracks) {
+            const offset = currentPlaylist.length;
             currentPlaylist = [...currentPlaylist, ...newTracks];
 
             const container = document.getElementById('playlistTracks');
@@ -892,6 +900,18 @@
 
             document.getElementById('playlistMeta').textContent =
                 `${currentPlaylist.length} songs • ${selectedMood}${addMoreMood && addMoreMood !== selectedMood ? ' → ' + addMoreMood : ''}`;
+
+            // Auto-add to existing Spotify playlist if already saved
+            if (savedPlaylistId && userAccessToken) {
+                const saveStatus = document.getElementById('saveStatus');
+                try {
+                    await pushTracksToPlaylist(savedPlaylistId, newTracks);
+                    saveStatus.innerHTML = `${newTracks.length} tracks added to your <a href="https://open.spotify.com/playlist/${savedPlaylistId}" target="_blank">Spotify playlist</a>`;
+                } catch (err) {
+                    console.error('Failed to add tracks to playlist:', err);
+                    saveStatus.textContent = 'Could not add to Spotify playlist — try saving again.';
+                }
+            }
         }
 
         function openInSpotify(url) {
@@ -936,9 +956,10 @@
         }
 
         // ── PKCE OAuth ────────────────────────────────────────────
-        let spotifyClientId = null;
+        let spotifyClientId  = null;
         let userAccessToken  = null;  // set after PKCE exchange
         let currentPlaylist  = [];    // tracks in the current playlist (incl. seed)
+        let savedPlaylistId  = null;  // Spotify playlist ID once saved
 
         const REDIRECT_URI  = window.location.origin + window.location.pathname.replace(/\/+$/, '') + '/';
         const SCOPES        = 'playlist-modify-public playlist-modify-private';
@@ -1071,6 +1092,7 @@
 
                 const playlist = await createSpotifyPlaylist(token, currentPlaylist, name);
 
+                savedPlaylistId     = playlist.id;
                 saveBtn.textContent = 'Saved ✓';
                 saveBtn.classList.add('saved');
                 saveStatus.innerHTML = `Playlist created: <a href="${playlist.external_urls.spotify}" target="_blank">${playlist.name}</a>`;
