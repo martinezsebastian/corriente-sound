@@ -49,10 +49,10 @@ async function getSpotifyToken() {
 // Used to filter co-listened tracks by mood via Last.fm track.getTopTags.
 
 const MOOD_LASTFM_TAGS = {
-    upbeat:   ['dance', 'electronic', 'pop', 'energetic', 'upbeat'],
-    chill:    ['chill', 'downtempo', 'ambient', 'lo-fi', 'acoustic', 'indie'],
-    groovy:   ['funk', 'disco', 'soul', 'groove', 'r&b'],
-    romantic: ['romantic', 'love', 'soul', 'ballad'],
+    upbeat:   ['dance', 'electronic', 'electronica', 'house', 'techno', 'pop', 'energetic', 'upbeat'],
+    chill:    ['chill', 'chillout', 'downtempo', 'trip-hop', 'ambient', 'lo-fi', 'acoustic', 'indie', 'lush'],
+    smooth:   ['funk', 'disco', 'soul', 'groove', 'r&b', 'rnb', 'rhythm and blues', 'motown'],
+    romantic: ['romantic', 'romantica', 'baladas', 'love', 'soul', 'ballad', 'slowcore'],
 };
 
 // ── Helpers ───────────────────────────────────────────────────
@@ -279,7 +279,7 @@ app.get('/api/recommendations', async (req, res) => {
         });
         if (!r.ok) return res.json([]);
         const trackData = await r.json();
-        const moodList  = moods.split(',').filter(m => m && MOOD_LASTFM_TAGS[m]);
+        const moodList  = moods.split(',').filter(m => m && MOOD_LASTFM_TAGS[m] !== undefined);
         const similar   = await findSimilarTracks(trackData, token, moodList);
         res.json(similar.slice(0, Number(limit)));
     } catch (err) {

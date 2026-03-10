@@ -23,7 +23,7 @@
             --rose-h:    #9A2A50;
             --tag-up:    rgba(180, 80, 20, 0.18);
             --tag-chill: rgba(26, 107, 80, 0.18);
-            --tag-gr:    rgba(26, 107, 80, 0.18);
+            --tag-sm:    rgba(122, 74, 154, 0.18);
             --tag-rom:   rgba(184, 56, 96, 0.18);
         }
 
@@ -280,7 +280,7 @@
 
         .mood-btn.mood-upbeat.selected   { background: #B8822A; border-color: #B8822A; box-shadow: 0 8px 18px rgba(184,130,42,0.30); }
         .mood-btn.mood-chill.selected    { background: #4A7A68; border-color: #4A7A68; box-shadow: 0 8px 18px rgba(74,122,104,0.30); }
-        .mood-btn.mood-groovy.selected   { background: #9A4A2A; border-color: #9A4A2A; box-shadow: 0 8px 18px rgba(154,74,42,0.30); }
+        .mood-btn.mood-smooth.selected   { background: #7A4A9A; border-color: #7A4A9A; box-shadow: 0 8px 18px rgba(122,74,154,0.30); }
         .mood-btn.mood-romantic.selected { background: #9A3A5C; border-color: #9A3A5C; box-shadow: 0 8px 18px rgba(154,58,92,0.30); }
 
         .mood-icon {
@@ -344,7 +344,7 @@
         .mood-tag { padding: 3px 8px; border-radius: 10px; font-size: 0.68rem; font-weight: 600; margin-left: 10px; font-family: 'DM Mono', monospace; }
         .mood-upbeat  { background: var(--tag-up);   color: #B45010; }
         .mood-chill   { background: var(--tag-chill); color: var(--accent); }
-        .mood-groovy  { background: var(--tag-gr);    color: var(--accent); }
+        .mood-smooth  { background: var(--tag-sm);    color: #7A4A9A; }
         .mood-romantic { background: var(--tag-rom);  color: var(--rose); }
 
         /* ── loading / error ── */
@@ -472,9 +472,9 @@
                     <span class="mood-icon">≈</span>
                     Chill
                 </button>
-                <button class="mood-btn mood-groovy" onclick="toggleMood(this, 'groovy')">
+                <button class="mood-btn mood-smooth" onclick="toggleMood(this, 'smooth')">
                     <span class="mood-icon">♩</span>
-                    Groovy
+                    Smooth
                 </button>
                 <button class="mood-btn mood-romantic" onclick="toggleMood(this, 'romantic')">
                     <span class="mood-icon">♡</span>
@@ -713,7 +713,7 @@
         const MOOD_COLORS = {
             upbeat:   '#B8822A',
             chill:    '#4A7A68',
-            groovy:   '#9A4A2A',
+            smooth:   '#7A4A9A',
             romantic: '#9A3A5C',
         };
 
