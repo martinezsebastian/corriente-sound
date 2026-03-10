@@ -149,10 +149,9 @@ async function findSimilarTracks(originalTrack, token, moods = []) {
 
         console.log(`🏷️  Mood tag matches: ${matchSet.size} / ${tracks.length}`);
 
-        tracks = tracks.map(t => ({
-            ...t,
-            _similarity: matchSet.has(t.id) ? t._lfmMatch : t._lfmMatch * 0.2,
-        }));
+        tracks = tracks
+            .filter(t => matchSet.has(t.id))
+            .map(t => ({ ...t, _similarity: t._lfmMatch }));
     } else {
         tracks = tracks.map(t => ({ ...t, _similarity: t._lfmMatch }));
     }
