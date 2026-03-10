@@ -57,6 +57,15 @@ const MOOD_LASTFM_TAGS = {
 
 // ── Helpers ───────────────────────────────────────────────────
 
+async function batchedPromiseAll(items, fn, batchSize = 10) {
+    const results = [];
+    for (let i = 0; i < items.length; i += batchSize) {
+        const batch = await Promise.allSettled(items.slice(i, i + batchSize).map(fn));
+        results.push(...batch);
+    }
+    return results;
+}
+
 function deduplicate(tracks) {
     const seen = new Set();
     return tracks.filter(t => {
@@ -97,20 +106,18 @@ async function findSimilarTracks(originalTrack, token, moods = []) {
 
     console.log(`🎸 Last.fm: ${lfmTracks.length} similar tracks for "${trackName}" by ${artistName}, moods: [${moods.join(', ') || 'none'}]`);
 
-    // 2. Hydrate with Spotify
-    const hydrated = await Promise.allSettled(
-        lfmTracks.slice(0, 40).map(lfm => {
-            const q = encodeURIComponent(`track:"${lfm.name}" artist:"${lfm.artist.name}"`);
-            return fetch(`https://api.spotify.com/v1/search?q=${q}&type=track&limit=1`, { headers })
-                .then(r => r.ok ? r.json() : null)
-                .then(data => {
-                    const t = data?.tracks?.items?.[0];
-                    if (!t) return null;
-                    return { ...t, _lfmMatch: Number(lfm.match), _strategy: 'lastfm' };
-                })
-                .catch(() => null);
-        })
-    );
+    // 2. Hydrate with Spotify (batched to avoid rate limits)
+    const hydrated = await batchedPromiseAll(lfmTracks.slice(0, 40), lfm => {
+        const q = encodeURIComponent(`track:"${lfm.name}" artist:"${lfm.artist.name}"`);
+        return fetch(`https://api.spotify.com/v1/search?q=${q}&type=track&limit=1`, { headers })
+            .then(r => r.ok ? r.json() : null)
+            .then(data => {
+                const t = data?.tracks?.items?.[0];
+                if (!t) return null;
+                return { ...t, _lfmMatch: Number(lfm.match), _strategy: 'lastfm' };
+            })
+            .catch(() => null);
+    }, 10);
 
     let tracks = hydrated
         .flatMap(r => r.status === 'fulfilled' && r.value ? [r.value] : [])
@@ -124,23 +131,21 @@ async function findSimilarTracks(originalTrack, token, moods = []) {
     if (moods.length > 0 && tracks.length > 0) {
         const moodTagSet = new Set(moods.flatMap(m => MOOD_LASTFM_TAGS[m] || []));
 
-        const tagResults = await Promise.allSettled(
-            tracks.map(t => {
-                const url = `https://ws.audioscrobbler.com/2.0/?method=track.getTopTags` +
-                    `&artist=${encodeURIComponent(t.artists[0].name)}&track=${encodeURIComponent(t.name)}` +
-                    `&api_key=${LASTFM_API_KEY}&format=json&autocorrect=1`;
-                return fetch(url)
-                    .then(r => r.ok ? r.json() : null)
-                    .then(data => {
-                        const tags = (data?.toptags?.tag || []).map(tag => tag.name.toLowerCase());
-                        const matches = tags.some(tag =>
-                            [...moodTagSet].some(mt => tag.includes(mt) || mt.includes(tag))
-                        );
-                        return { id: t.id, matches };
-                    })
-                    .catch(() => ({ id: t.id, matches: false }));
-            })
-        );
+        const tagResults = await batchedPromiseAll(tracks, t => {
+            const url = `https://ws.audioscrobbler.com/2.0/?method=track.getTopTags` +
+                `&artist=${encodeURIComponent(t.artists[0].name)}&track=${encodeURIComponent(t.name)}` +
+                `&api_key=${LASTFM_API_KEY}&format=json&autocorrect=1`;
+            return fetch(url)
+                .then(r => r.ok ? r.json() : null)
+                .then(data => {
+                    const tags = (data?.toptags?.tag || []).map(tag => tag.name.toLowerCase());
+                    const matches = tags.some(tag =>
+                        [...moodTagSet].some(mt => tag.includes(mt) || mt.includes(tag))
+                    );
+                    return { id: t.id, matches };
+                })
+                .catch(() => ({ id: t.id, matches: false }));
+        }, 8);
 
         const matchSet = new Set(
             tagResults
@@ -151,18 +156,9 @@ async function findSimilarTracks(originalTrack, token, moods = []) {
 
         console.log(`🏷️  Mood tag matches: ${matchSet.size} / ${tracks.length}`);
 
-        const matching    = tracks.filter(t =>  matchSet.has(t.id)).map(t => ({ ...t, _similarity: t._lfmMatch }));
-        const nonMatching = tracks.filter(t => !matchSet.has(t.id)).map(t => ({ ...t, _similarity: t._lfmMatch * 0.4 }));
-
-        const MIN_TRACKS = 6;
-        if (matching.length >= MIN_TRACKS) {
-            tracks = matching;
-        } else {
-            // Not enough mood matches — pad with best non-matching by similarity
-            const needed = MIN_TRACKS - matching.length;
-            const padding = nonMatching.sort((a, b) => b._lfmMatch - a._lfmMatch).slice(0, needed);
-            tracks = [...matching, ...padding];
-        }
+        tracks = tracks
+            .filter(t => matchSet.has(t.id))
+            .map(t => ({ ...t, _similarity: t._lfmMatch }));
     } else {
         tracks = tracks.map(t => ({ ...t, _similarity: t._lfmMatch }));
     }
