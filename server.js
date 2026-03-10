@@ -116,6 +116,8 @@ async function findSimilarTracks(originalTrack, token, moods = []) {
         .flatMap(r => r.status === 'fulfilled' && r.value ? [r.value] : [])
         .filter(t => t.id !== originalTrack.id);
 
+    const lfmHydratedCount = tracks.length; // snapshot before mood filter, for fallback check
+
     // 3. Tag filter: fetch Last.fm tags for each hydrated track.
     //    Tracks whose tags match the selected mood keep their full _lfmMatch score.
     //    Tracks that don't match are heavily deprioritized (not discarded, as a safety net).
@@ -167,8 +169,8 @@ async function findSimilarTracks(originalTrack, token, moods = []) {
         }
     } catch (_) {}
 
-    // 5. Fallback: if Last.fm returned nothing, use Spotify genre-artist search
-    if (tracks.filter(t => t._strategy === 'lastfm').length < 3) {
+    // 5. Fallback: only if Last.fm genuinely didn't know the song (before mood filtering)
+    if (lfmHydratedCount < 3) {
         console.log('⚠️  Last.fm sparse — falling back to genre-artist search');
         let seedGenres = [];
         try {
