@@ -151,9 +151,18 @@ async function findSimilarTracks(originalTrack, token, moods = []) {
 
         console.log(`🏷️  Mood tag matches: ${matchSet.size} / ${tracks.length}`);
 
-        tracks = tracks
-            .filter(t => matchSet.has(t.id))
-            .map(t => ({ ...t, _similarity: t._lfmMatch }));
+        const matching    = tracks.filter(t =>  matchSet.has(t.id)).map(t => ({ ...t, _similarity: t._lfmMatch }));
+        const nonMatching = tracks.filter(t => !matchSet.has(t.id)).map(t => ({ ...t, _similarity: t._lfmMatch * 0.4 }));
+
+        const MIN_TRACKS = 6;
+        if (matching.length >= MIN_TRACKS) {
+            tracks = matching;
+        } else {
+            // Not enough mood matches — pad with best non-matching by similarity
+            const needed = MIN_TRACKS - matching.length;
+            const padding = nonMatching.sort((a, b) => b._lfmMatch - a._lfmMatch).slice(0, needed);
+            tracks = [...matching, ...padding];
+        }
     } else {
         tracks = tracks.map(t => ({ ...t, _similarity: t._lfmMatch }));
     }
