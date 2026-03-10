@@ -87,7 +87,7 @@ async function findSimilarTracks(originalTrack, token, moods = []) {
     try {
         const url = `https://ws.audioscrobbler.com/2.0/?method=track.getsimilar` +
             `&artist=${encodeURIComponent(artistName)}&track=${encodeURIComponent(trackName)}` +
-            `&api_key=${LASTFM_API_KEY}&format=json&limit=25&autocorrect=1`;
+            `&api_key=${LASTFM_API_KEY}&format=json&limit=50&autocorrect=1`;
         const r = await fetch(url);
         if (r.ok) {
             const data = await r.json();
@@ -99,7 +99,7 @@ async function findSimilarTracks(originalTrack, token, moods = []) {
 
     // 2. Hydrate with Spotify
     const hydrated = await Promise.allSettled(
-        lfmTracks.slice(0, 20).map(lfm => {
+        lfmTracks.slice(0, 40).map(lfm => {
             const q = encodeURIComponent(`track:"${lfm.name}" artist:"${lfm.artist.name}"`);
             return fetch(`https://api.spotify.com/v1/search?q=${q}&type=track&limit=1`, { headers })
                 .then(r => r.ok ? r.json() : null)
