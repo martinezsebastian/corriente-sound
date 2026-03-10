@@ -379,16 +379,16 @@
         .wave-loader .w3 { animation-name: wave3; animation-delay: 0.36s; }
 
         @keyframes wave1 {
-            0%, 100% { d: path('M2 7 Q9 3 16 7 Q23 11 30 7'); }
-            50%       { d: path('M2 7 Q9 11 16 7 Q23 3 30 7'); }
+            0%, 100% { d: path('M8 2 Q4 9 8 16 Q12 23 8 30'); }
+            50%       { d: path('M8 2 Q12 9 8 16 Q4 23 8 30'); }
         }
         @keyframes wave2 {
-            0%, 100% { d: path('M2 13 Q9 9 16 13 Q23 17 30 13'); }
-            50%       { d: path('M2 13 Q9 17 16 13 Q23 9 30 13'); }
+            0%, 100% { d: path('M16 2 Q12 9 16 16 Q20 23 16 30'); }
+            50%       { d: path('M16 2 Q20 9 16 16 Q12 23 16 30'); }
         }
         @keyframes wave3 {
-            0%, 100% { d: path('M2 19 Q9 15 16 19 Q23 23 30 19'); }
-            50%       { d: path('M2 19 Q9 23 16 19 Q23 15 30 19'); }
+            0%, 100% { d: path('M24 2 Q20 9 24 16 Q28 23 24 30'); }
+            50%       { d: path('M24 2 Q28 9 24 16 Q20 23 24 30'); }
         }
 
         /* ── loading / error ── */
@@ -449,7 +449,7 @@
 <body>
     <div class="container">
         <div class="header">
-            <h1 class="logo">Corriente Sound</h1>
+            <h1 class="logo"><a href="/" style="text-decoration:none; color:inherit;">Corriente Sound</a></h1>
             <p class="subtitle">Play your Current</p>
         </div>
 
@@ -535,7 +535,7 @@
             </div>
 
             <div class="wave-loader" id="waveLoader">
-                <svg viewBox="0 0 32 26" width="56" height="46">
+                <svg viewBox="0 0 32 32" width="48" height="48">
                     <path class="w1" stroke="var(--ink)" stroke-width="2.2" fill="none" stroke-linecap="round"/>
                     <path class="w2" stroke="var(--ink)" stroke-width="2.2" fill="none" stroke-linecap="round"/>
                     <path class="w3" stroke="var(--ink)" stroke-width="2.2" fill="none" stroke-linecap="round"/>
