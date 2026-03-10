@@ -279,10 +279,27 @@
         .mood-btn:hover { border-color: var(--accent); transform: translateY(-2px); background: rgba(255, 245, 230, 0.85); }
         .mood-btn.selected { color: white; }
 
-        .mood-btn.mood-upbeat.selected   { background: #B8822A; border-color: #B8822A; box-shadow: 0 8px 18px rgba(184,130,42,0.30); }
-        .mood-btn.mood-chill.selected    { background: #4A7A68; border-color: #4A7A68; box-shadow: 0 8px 18px rgba(74,122,104,0.30); }
-        .mood-btn.mood-smooth.selected   { background: #7A4A9A; border-color: #7A4A9A; box-shadow: 0 8px 18px rgba(122,74,154,0.30); }
-        .mood-btn.mood-romantic.selected { background: #9A3A5C; border-color: #9A3A5C; box-shadow: 0 8px 18px rgba(154,58,92,0.30); }
+        .mood-btn.mood-upbeat.selected { background: #B8822A; border-color: #B8822A; box-shadow: 0 8px 18px rgba(184,130,42,0.30); }
+        .mood-btn.mood-chill.selected  { background: #4A7A68; border-color: #4A7A68; box-shadow: 0 8px 18px rgba(74,122,104,0.30); }
+        .mood-btn.mood-smooth.selected { background: #7A4A9A; border-color: #7A4A9A; box-shadow: 0 8px 18px rgba(122,74,154,0.30); }
+
+        /* ── add more section ── */
+        .add-more-section {
+            display: none;
+            margin-top: 28px;
+            padding-top: 24px;
+            border-top: 1px solid var(--rule);
+        }
+        .add-more-section.show { display: block; }
+        .add-more-label {
+            font-family: 'DM Mono', monospace;
+            font-size: 0.8rem;
+            letter-spacing: 0.08em;
+            text-transform: uppercase;
+            color: var(--ink-mid);
+            text-align: center;
+            margin-bottom: 16px;
+        }
 
         .mood-icon {
             font-size: 1.6rem;
@@ -465,21 +482,17 @@
             <p class="mood-subtitle">Select the mood directions you want to explore</p>
             
             <div class="mood-buttons">
-                <button class="mood-btn mood-upbeat" onclick="toggleMood(this, 'upbeat')">
+                <button class="mood-btn mood-upbeat" onclick="selectMood(this, 'upbeat')">
                     <span class="mood-icon">↑</span>
                     Upbeat
                 </button>
-                <button class="mood-btn mood-chill" onclick="toggleMood(this, 'chill')">
+                <button class="mood-btn mood-chill" onclick="selectMood(this, 'chill')">
                     <span class="mood-icon">≈</span>
                     Chill
                 </button>
-                <button class="mood-btn mood-smooth" onclick="toggleMood(this, 'smooth')">
+                <button class="mood-btn mood-smooth" onclick="selectMood(this, 'smooth')">
                     <span class="mood-icon">♩</span>
                     Smooth
-                </button>
-                <button class="mood-btn mood-romantic" onclick="toggleMood(this, 'romantic')">
-                    <span class="mood-icon">♡</span>
-                    Romantic
                 </button>
             </div>
 
@@ -501,6 +514,27 @@
                 Save to Spotify
             </button>
             <p class="save-status" id="saveStatus"></p>
+
+            <div class="add-more-section" id="addMoreSection">
+                <p class="add-more-label">Take it further</p>
+                <div class="mood-buttons">
+                    <button class="mood-btn mood-upbeat" id="am-upbeat" onclick="selectAddMoreMood(this, 'upbeat')">
+                        <span class="mood-icon">↑</span>
+                        Upbeat
+                    </button>
+                    <button class="mood-btn mood-chill" id="am-chill" onclick="selectAddMoreMood(this, 'chill')">
+                        <span class="mood-icon">≈</span>
+                        Chill
+                    </button>
+                    <button class="mood-btn mood-smooth" id="am-smooth" onclick="selectAddMoreMood(this, 'smooth')">
+                        <span class="mood-icon">♩</span>
+                        Smooth
+                    </button>
+                </div>
+                <button class="generate-btn" id="addMoreBtn" onclick="addMoreTracks()" style="display:none;">
+                    Add 5 more
+                </button>
+            </div>
         </div>
     </div>
 
@@ -511,9 +545,8 @@
             'http://localhost:3001/api' : '/api';
 
         let isAuthenticated = false;
-        let selectedMoods = [];
-        let currentSong = null;
-        let searchTimeout = null;
+        let currentSong     = null;
+        let searchTimeout   = null;
 
         // Enhanced error handling for ReccoBeats integration
         function showError(message, details = null) {
@@ -585,12 +618,13 @@
             }
         }
 
-        async function getRecommendations(seedTrackId, moods) {
+        async function getRecommendations(seedTrackId, mood, excludeIds = []) {
             try {
                 const queryParams = new URLSearchParams({
                     seed_tracks: seedTrackId,
-                    moods: moods.join(','),
-                    limit: 9,
+                    moods:       mood,
+                    limit:       5,
+                    exclude_ids: excludeIds.join(','),
                 });
                 const response = await fetch(`${API_BASE}/recommendations?${queryParams}`);
                 if (!response.ok) {
@@ -712,109 +746,126 @@
         }
 
         const MOOD_COLORS = {
-            upbeat:   '#B8822A',
-            chill:    '#4A7A68',
-            smooth:   '#7A4A9A',
-            romantic: '#9A3A5C',
+            upbeat: '#B8822A',
+            chill:  '#4A7A68',
+            smooth: '#7A4A9A',
         };
 
-        function toggleMood(button, moodType) {
-            if (button.classList.contains('selected')) {
-                button.classList.remove('selected');
-                selectedMoods = selectedMoods.filter(m => m !== moodType);
-            } else {
-                button.classList.add('selected');
-                selectedMoods.push(moodType);
-            }
+        let selectedMood    = null;  // single mood for initial generation
+        let addMoreMood     = null;  // single mood for "add more"
 
-            // Show/update generate button
+        function selectMood(button, moodType) {
+            // Single-select: deselect all others
+            document.querySelectorAll('#moodSection .mood-btn').forEach(b => b.classList.remove('selected'));
+            button.classList.add('selected');
+            selectedMood = moodType;
+
             const generateBtn = document.getElementById('generateBtn');
-            if (selectedMoods.length > 0) {
-                generateBtn.classList.add('show');
-                const colors = selectedMoods.map(m => MOOD_COLORS[m]);
-                generateBtn.style.background = colors.length === 1
-                    ? colors[0]
-                    : `linear-gradient(90deg, ${colors.join(', ')})`;
-            } else {
-                generateBtn.classList.remove('show');
-                generateBtn.style.background = '';
-            }
+            generateBtn.classList.add('show');
+            generateBtn.style.background = MOOD_COLORS[moodType];
         }
 
-        // Enhanced playlist generation with better feedback
+        function selectAddMoreMood(button, moodType) {
+            document.querySelectorAll('#addMoreSection .mood-btn').forEach(b => b.classList.remove('selected'));
+            button.classList.add('selected');
+            addMoreMood = moodType;
+
+            const addMoreBtn = document.getElementById('addMoreBtn');
+            addMoreBtn.style.display = 'block';
+            addMoreBtn.style.background = MOOD_COLORS[moodType];
+        }
+
         async function generatePlaylist() {
-            if (selectedMoods.length === 0 || !currentSong) return;
+            if (!selectedMood || !currentSong) return;
 
             showLoading(true);
-            
-            // Update UI to show progress
             const playlistSection = document.getElementById('playlistSection');
-            const metaDiv = document.getElementById('playlistMeta');
-            metaDiv.textContent = 'Analyzing song and generating recommendations...';
+            const metaDiv         = document.getElementById('playlistMeta');
+            metaDiv.textContent   = 'Finding songs…';
             playlistSection.classList.add('show');
             playlistSection.scrollIntoView({ behavior: 'smooth' });
-            
+
             try {
-                // Get recommendations using ReccoBeats backend
-                const recommendations = await getRecommendations(currentSong.id, selectedMoods);
-                
+                const recommendations = await getRecommendations(currentSong.id, selectedMood);
+
                 if (recommendations.length === 0) {
-                    metaDiv.textContent = 'Could not generate recommendations for this song. Try a different track or mood combination.';
-                    showError('No recommendations available for this combination');
+                    metaDiv.textContent = 'No matches found. Try a different mood or song.';
                     return;
                 }
-                
-                // Build playlist (original song + recommendations)
-                const playlist = [currentSong, ...recommendations];
-                
-                // Display playlist
-                displayPlaylist(playlist);
-                
+
+                displayPlaylist([currentSong, ...recommendations]);
             } catch (error) {
                 console.error('Playlist generation failed:', error);
-                metaDiv.textContent = 'Playlist generation failed. Please try again.';
-                showError('Failed to generate playlist: ' + error.message);
+                metaDiv.textContent = 'Generation failed. Please try again.';
             } finally {
                 showLoading(false);
             }
+        }
+
+        async function addMoreTracks() {
+            if (!addMoreMood || currentPlaylist.length === 0) return;
+
+            showLoading(true);
+            const addMoreBtn = document.getElementById('addMoreBtn');
+            addMoreBtn.disabled    = true;
+            addMoreBtn.textContent = 'Finding more…';
+
+            try {
+                const excludeIds = currentPlaylist.map(t => t.id);
+                // Use a random track from the current playlist as seed (excluding the original seed)
+                const pool      = currentPlaylist.slice(1);
+                const seedTrack = pool[Math.floor(Math.random() * pool.length)] || currentPlaylist[0];
+                const newTracks = await getRecommendations(seedTrack.id, addMoreMood, excludeIds);
+
+                if (newTracks.length === 0) {
+                    addMoreBtn.textContent = 'No more found';
+                    return;
+                }
+
+                appendTracks(newTracks);
+            } catch (error) {
+                console.error('Add more failed:', error);
+            } finally {
+                showLoading(false);
+                addMoreBtn.disabled    = false;
+                addMoreBtn.textContent = 'Add 5 more';
+            }
+        }
+
+        function makeTrackEl(track, index) {
+            const trackDiv  = document.createElement('div');
+            trackDiv.className = 'track-item';
+            trackDiv.onclick   = () => openInSpotify(track.external_urls?.spotify || '#');
+
+            const artwork = track.album?.images?.length > 0
+                ? `<img src="${track.album.images[2]?.url || track.album.images[0]?.url}" class="track-artwork" />`
+                : `<div class="track-artwork-placeholder">🎵</div>`;
+
+            const moodTag   = index === 0 ? 'original' : (selectedMood || addMoreMood || '');
+            const moodClass = moodTag ? `mood-${moodTag}` : '';
+
+            trackDiv.innerHTML = `
+                <span class="track-number">${index + 1}</span>
+                ${artwork}
+                <div class="track-info">
+                    <div class="track-title">${track.name || 'Unknown Track'}</div>
+                    <div class="track-artist">${track.artists?.[0]?.name || 'Unknown Artist'}</div>
+                </div>
+                ${moodTag ? `<span class="mood-tag ${moodClass}">${moodTag}</span>` : ''}
+            `;
+            return trackDiv;
         }
 
         function displayPlaylist(playlist) {
             currentPlaylist = playlist;
 
             const tracksDiv = document.getElementById('playlistTracks');
-            const metaDiv = document.getElementById('playlistMeta');
-
+            const metaDiv   = document.getElementById('playlistMeta');
             tracksDiv.innerHTML = '';
-            metaDiv.textContent = `${playlist.length} songs • moods: ${selectedMoods.join(', ')}`;
+            metaDiv.textContent = `${playlist.length} songs • ${selectedMood}`;
 
-            playlist.forEach((track, index) => {
-                const trackDiv = document.createElement('div');
-                trackDiv.className = 'track-item';
-                trackDiv.onclick = () => openInSpotify(track.external_urls?.spotify || '#');
+            playlist.forEach((track, index) => tracksDiv.appendChild(makeTrackEl(track, index)));
 
-                const artwork = track.album?.images?.length > 0 ?
-                    `<img src="${track.album.images[2]?.url || track.album.images[0]?.url}" class="track-artwork" />` :
-                    `<div class="track-artwork-placeholder">🎵</div>`;
-
-                // Determine mood tag based on position and selected moods
-                const moodTag = index === 0 ? 'original' : selectedMoods[Math.floor(Math.random() * selectedMoods.length)];
-                const moodClass = `mood-${moodTag}`;
-
-                trackDiv.innerHTML = `
-                    <span class="track-number">${index + 1}</span>
-                    ${artwork}
-                    <div class="track-info">
-                        <div class="track-title">${track.name || 'Unknown Track'}</div>
-                        <div class="track-artist">${track.artists?.[0]?.name || 'Unknown Artist'}</div>
-                    </div>
-                    <span class="mood-tag ${moodClass}">${moodTag}</span>
-                `;
-
-                tracksDiv.appendChild(trackDiv);
-            });
-
-            // Show playlist section
             document.getElementById('playlistSection').classList.add('show');
             document.getElementById('playlistSection').scrollIntoView({ behavior: 'smooth' });
 
@@ -825,6 +876,22 @@
             saveBtn.disabled    = false;
             saveBtn.textContent = 'Save to Spotify';
             document.getElementById('saveStatus').textContent = '';
+
+            // Show "add more" section
+            document.getElementById('addMoreSection').classList.add('show');
+        }
+
+        function appendTracks(newTracks) {
+            const tracksDiv = document.getElementById('tracksDiv');
+            const offset    = currentPlaylist.length;
+
+            currentPlaylist = [...currentPlaylist, ...newTracks];
+
+            const container = document.getElementById('playlistTracks');
+            newTracks.forEach((track, i) => container.appendChild(makeTrackEl(track, offset + i)));
+
+            document.getElementById('playlistMeta').textContent =
+                `${currentPlaylist.length} songs • ${selectedMood}${addMoreMood && addMoreMood !== selectedMood ? ' → ' + addMoreMood : ''}`;
         }
 
         function openInSpotify(url) {
@@ -898,7 +965,7 @@
 
             // Persist the current playlist so we can save it after the redirect
             sessionStorage.setItem('pendingPlaylist',  JSON.stringify(currentPlaylist));
-            sessionStorage.setItem('pendingMoods',     JSON.stringify(selectedMoods));
+            sessionStorage.setItem('pendingMoods',     JSON.stringify(selectedMood));
             sessionStorage.setItem('pendingSeedSong',  JSON.stringify(currentSong));
 
             const verifier   = generateCodeVerifier();
@@ -998,7 +1065,7 @@
             saveStatus.textContent = '';
 
             try {
-                const moodLabel = selectedMoods.length ? selectedMoods.join(' + ') : 'mixed';
+                const moodLabel = selectedMood || addMoreMood || 'mixed';
                 const seedName  = currentSong?.name || 'unknown';
                 const name      = `Corriente — ${seedName} (${moodLabel})`;
 
@@ -1055,7 +1122,7 @@
             if (pendingPlaylist && pendingPlaylist.length > 0) {
                 // Restore UI state
                 currentPlaylist = pendingPlaylist;
-                if (pendingMoods)    selectedMoods = pendingMoods;
+                if (pendingMoods)    selectedMood = Array.isArray(pendingMoods) ? pendingMoods[0] : pendingMoods;
                 if (pendingSeedSong) currentSong   = pendingSeedSong;
 
                 // Re-display the playlist

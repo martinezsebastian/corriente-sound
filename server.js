@@ -49,10 +49,26 @@ async function getSpotifyToken() {
 // Used to filter co-listened tracks by mood via Last.fm track.getTopTags.
 
 const MOOD_LASTFM_TAGS = {
-    upbeat:   ['dance', 'electronic', 'electronica', 'house', 'techno', 'pop', 'energetic', 'upbeat'],
-    chill:    ['chill', 'chillout', 'downtempo', 'trip-hop', 'ambient', 'lo-fi', 'acoustic', 'indie', 'lush'],
-    smooth:   ['funk', 'disco', 'soul', 'groove', 'r&b', 'rnb', 'rhythm and blues', 'motown'],
-    romantic: ['romantic', 'romantica', 'baladas', 'love', 'soul', 'ballad', 'slowcore'],
+    upbeat: [
+        'dance', 'electronic', 'electronica', 'house', 'techno', 'pop', 'energetic', 'upbeat',
+        'edm', 'dubstep', 'rave', 'party', 'happy', 'indie pop', 'dance pop', 'electropop',
+        'synthpop', 'eurodance', 'trance', 'hip hop', 'hip-hop', 'rap', 'trap', 'reggaeton',
+        'dancehall', 'k-pop', 'j-pop', 'new rave', 'electro', 'disco',
+    ],
+    chill: [
+        'chill', 'chillout', 'downtempo', 'trip-hop', 'trip hop', 'ambient', 'lo-fi', 'acoustic',
+        'indie', 'lush', 'folk', 'folk rock', 'singer-songwriter', 'mellow', 'soft rock', 'lounge',
+        'new age', 'meditation', 'relaxing', 'calm', 'quiet', 'soft', 'dream pop', 'shoegaze',
+        'indie folk', 'post-rock', 'slowcore', 'chillwave', 'atmospheric', 'dreamy', 'sleep',
+        'romantic', 'romantica', 'baladas', 'love', 'ballad', 'love songs', 'melancholic',
+        'melancholy', 'nostalgic', 'bittersweet', 'ethereal', 'sweet', 'sad',
+    ],
+    smooth: [
+        'soul', 'funk', 'jazz', 'r&b', 'rnb', 'rhythm and blues', 'motown', 'groove', 'funky',
+        'smooth jazz', 'neo soul', 'acid jazz', 'vocal jazz', 'jazz fusion', 'blues', 'bossa nova',
+        'latin jazz', 'swing', 'big band', 'bebop', 'nu jazz', 'jazzy', 'soulful', 'afrobeat',
+        'dub', 'reggae', 'slow jams', 'sensual', 'latin',
+    ],
 };
 
 // ── Helpers ───────────────────────────────────────────────────
@@ -85,7 +101,7 @@ function deduplicate(tracks) {
 // 5. Seed artist top tracks     — 2 tracks from the same artist
 // 6. Fallback                   — genre search if Last.fm returns nothing
 
-async function findSimilarTracks(originalTrack, token, moods = []) {
+async function findSimilarTracks(originalTrack, token, moods = [], excludeIds = new Set()) {
     const artistId   = originalTrack.artists[0].id;
     const artistName = originalTrack.artists[0].name;
     const headers    = { Authorization: `Bearer ${token}` };
@@ -138,7 +154,7 @@ async function findSimilarTracks(originalTrack, token, moods = []) {
 
     let tracks = hydrated
         .flatMap(r => r.status === 'fulfilled' && r.value ? [r.value] : [])
-        .filter(t => t.id !== originalTrack.id);
+        .filter(t => t.id !== originalTrack.id && !excludeIds.has(t.id));
 
     const lfmHydratedCount = tracks.length;
 
@@ -183,7 +199,7 @@ async function findSimilarTracks(originalTrack, token, moods = []) {
         const r = await fetch(`https://api.spotify.com/v1/artists/${artistId}/top-tracks?market=US`, { headers });
         if (r.ok) {
             ((await r.json()).tracks || [])
-                .filter(t => t.id !== originalTrack.id)
+                .filter(t => t.id !== originalTrack.id && !excludeIds.has(t.id))
                 .slice(0, 2)
                 .forEach(t => tracks.push({ ...t, _strategy: 'seed artist', _similarity: 0.9 }));
         }
@@ -291,17 +307,18 @@ app.get('/api/similar-song/:trackId', async (req, res) => {
 });
 
 app.get('/api/recommendations', async (req, res) => {
-    const { seed_tracks, moods = '', limit = 9 } = req.query;
+    const { seed_tracks, moods = '', limit = 5, exclude_ids = '' } = req.query;
     if (!seed_tracks) return res.status(400).json({ error: 'seed_tracks parameter required' });
     try {
-        const token    = await getSpotifyToken();
-        const r        = await fetch(`https://api.spotify.com/v1/tracks/${seed_tracks}`, {
+        const token      = await getSpotifyToken();
+        const r          = await fetch(`https://api.spotify.com/v1/tracks/${seed_tracks}`, {
             headers: { Authorization: `Bearer ${token}` },
         });
         if (!r.ok) return res.json([]);
-        const trackData = await r.json();
-        const moodList  = moods.split(',').filter(m => m && MOOD_LASTFM_TAGS[m] !== undefined);
-        const similar   = await findSimilarTracks(trackData, token, moodList);
+        const trackData  = await r.json();
+        const moodList   = moods.split(',').filter(m => m && MOOD_LASTFM_TAGS[m] !== undefined);
+        const excludeIds = new Set(exclude_ids.split(',').filter(Boolean));
+        const similar    = await findSimilarTracks(trackData, token, moodList, excludeIds);
         res.json(similar.slice(0, Number(limit)));
     } catch (err) {
         console.error('Recommendations error:', err);
