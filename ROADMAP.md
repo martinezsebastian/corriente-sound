@@ -18,6 +18,9 @@
 - [ ] Add to existing playlist picker (instead of always creating new)
 - [ ] Session history — remember playlists generated in this session
 
+## Multi-user / Public Launch
+- [ ] Apply for Spotify extended quota — app is currently in development mode (capped at 25 users); need to submit for quota extension via Spotify Developer Dashboard to open it to the public
+
 ## UI / Polish
 - [ ] Mobile layout review
 - [ ] Loading skeleton instead of spinner
